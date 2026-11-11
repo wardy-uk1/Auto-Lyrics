@@ -186,6 +186,12 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putBoolean("aa_karaoke_enabled", isChecked).apply()
         }
 
+        val switchAaBigLyrics = findViewById<SwitchCompat>(R.id.switch_aa_big_lyrics)
+        switchAaBigLyrics.isChecked = prefs.getBoolean("aa_big_lyrics", true)
+        switchAaBigLyrics.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("aa_big_lyrics", isChecked).apply()
+        }
+
         switchTranslation = findViewById(R.id.switch_translation)
         switchTranslation.isChecked = prefs.getBoolean("translation_enabled", true)
         switchTranslation.setOnCheckedChangeListener { _, isChecked ->

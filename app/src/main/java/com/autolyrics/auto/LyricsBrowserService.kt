@@ -38,6 +38,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
     private var lastAlbumArt: Bitmap? = null
 
     private var aaKaraokeEnabled = true
+    private var aaBigLyrics = true
     private var aaOffsetMs = 0L
 
     private var lastKaraokeLineIdx = -1
@@ -54,6 +55,11 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
                 "aa_offset_ms" -> {
                     aaOffsetMs = sp.getLong(key, 0L)
                     forceRefresh()
+                }
+                "aa_big_lyrics" -> {
+                    aaBigLyrics = sp.getBoolean(key, true)
+                    lastSubtitleText = null
+                    updateMediaSession(mediaTracker.state.value)
                 }
             }
         }
@@ -81,6 +87,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         val prefs = getSharedPreferences("auto_lyrics_prefs", MODE_PRIVATE)
         aaKaraokeEnabled = prefs.getBoolean("aa_karaoke_enabled", true)
         aaOffsetMs = prefs.getLong("aa_offset_ms", 0L)
+        aaBigLyrics = prefs.getBoolean("aa_big_lyrics", true)
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
         mediaSession = MediaSessionCompat(this, "AutoLyrics").apply {
@@ -470,9 +477,18 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
     // --- MediaSession management ---
 
-    private fun buildBaseMetadata(state: LyricsState): MediaMetadataCompat.Builder {
+    /**
+     * Builds the now-playing card metadata.
+     *
+     * Android Auto decides the font sizes itself: the "display title" is shown big
+     * (up to 2 lines) and the "display subtitle" small (1 line). With "Big lyrics"
+     * on, the current lyric goes in the big title slot and "Song — Artist" goes in
+     * the small subtitle slot. With it off, the original layout is used.
+     */
+    private fun buildMetadata(state: LyricsState, lyricText: String): MediaMetadataCompat {
         val metaBuilder = MediaMetadataCompat.Builder()
 
+        var trackLine = ""
         state.track?.let { track ->
             metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, track.title)
             metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, track.artist)
@@ -480,13 +496,29 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             if (track.durationMs > 0) {
                 metaBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, track.durationMs)
             }
-
-            val displayTitle = if (track.artist.isNotBlank()) {
+            trackLine = if (track.artist.isNotBlank()) {
                 "${track.title} — ${track.artist}"
             } else {
                 track.title
             }
-            metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, displayTitle)
+        }
+
+        if (aaBigLyrics && state.track != null) {
+            // Big line: the lyric (or the song name / a note while there is no lyric yet)
+            val bigText = lyricText.ifBlank {
+                if (state.status == LyricsStatus.FOUND || state.status == LyricsStatus.PLAIN_ONLY) "♪" else trackLine
+            }
+            metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, bigText)
+            if (bigText != trackLine) {
+                metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, trackLine)
+            }
+        } else {
+            if (trackLine.isNotBlank()) {
+                metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, trackLine)
+            }
+            if (lyricText.isNotBlank()) {
+                metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, lyricText)
+            }
         }
 
         val art = state.albumArt ?: lastAlbumArt
@@ -495,7 +527,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             lastAlbumArt = art
         }
 
-        return metaBuilder
+        return metaBuilder.build()
     }
 
     private fun updateMediaSession(state: LyricsState) {
@@ -507,18 +539,10 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             resetKaraokeState()
         }
 
-        val metaBuilder = buildBaseMetadata(state)
+        val lyricText = getSubtitleText(state)
+        lastSubtitleText = lyricText
 
-        val subtitleText = getSubtitleText(state)
-        if (subtitleText.isNotBlank()) {
-            metaBuilder.putString(
-                MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE,
-                subtitleText
-            )
-        }
-        lastSubtitleText = subtitleText
-
-        mediaSession.setMetadata(metaBuilder.build())
+        mediaSession.setMetadata(buildMetadata(state, lyricText))
         mediaSession.setPlaybackState(buildPlaybackState(state))
     }
 
@@ -527,18 +551,11 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         if (!state.isPlaying) return
         if (state.status != LyricsStatus.FOUND && state.status != LyricsStatus.PLAIN_ONLY) return
 
-        val subtitleText = getSubtitleText(state)
-        if (subtitleText == lastSubtitleText) return
-        lastSubtitleText = subtitleText
+        val lyricText = getSubtitleText(state)
+        if (lyricText == lastSubtitleText) return
+        lastSubtitleText = lyricText
 
-        val metaBuilder = buildBaseMetadata(state)
-        if (subtitleText.isNotBlank()) {
-            metaBuilder.putString(
-                MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE,
-                subtitleText
-            )
-        }
-        mediaSession.setMetadata(metaBuilder.build())
+        mediaSession.setMetadata(buildMetadata(state, lyricText))
         mediaSession.setPlaybackState(buildPlaybackState(state))
     }
 

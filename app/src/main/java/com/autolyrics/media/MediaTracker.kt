@@ -14,6 +14,7 @@ import com.autolyrics.lyrics.LrcParser
 import com.autolyrics.lyrics.LyricsCache
 import com.autolyrics.lyrics.LyricsTranslator
 import com.autolyrics.lyrics.MetadataCleaner
+import com.autolyrics.lyrics.NetEaseClient
 import com.autolyrics.lyrics.SyncLrcClient
 import com.autolyrics.model.LyricLine
 import com.autolyrics.model.LyricsState
@@ -284,7 +285,7 @@ class MediaTracker private constructor(context: Context) {
                     }
                 }
 
-                val result = fetchFromSyncLrc(track) ?: fetchFromLrcLib(track)
+                val result = fetchFromAllSources(track)
 
                 withContext(Dispatchers.Main) {
                     if (_state.value.track != track) return@withContext
@@ -353,7 +354,7 @@ class MediaTracker private constructor(context: Context) {
                     if (lyricsCache.get(title, artist) != null) return@launch
 
                     val nextTrack = TrackInfo(title, artist, "", 0)
-                    val result = fetchFromSyncLrc(nextTrack) ?: fetchFromLrcLib(nextTrack)
+                    val result = fetchFromAllSources(nextTrack)
                     if (result != null) {
                         lyricsCache.put(title, artist, result.lines, result.status, result.source)
                     }
@@ -370,6 +371,43 @@ class MediaTracker private constructor(context: Context) {
         val status: LyricsStatus,
         val source: String
     )
+
+    /**
+     * Tries every source in order: SyncLRC -> LRCLIB -> NetEase.
+     * Synced lyrics from any source beat plain (unsynced) lyrics; a later source
+     * is only asked if the earlier ones had no synced lyrics.
+     */
+    private fun fetchFromAllSources(track: TrackInfo): FetchResult? {
+        val syncLrc = fetchFromSyncLrc(track)
+        if (syncLrc?.status == LyricsStatus.FOUND) return syncLrc
+
+        val lrcLib = fetchFromLrcLib(track)
+        if (lrcLib?.status == LyricsStatus.FOUND) return lrcLib
+
+        val netEase = fetchFromNetEase(track)
+        if (netEase?.status == LyricsStatus.FOUND) return netEase
+
+        return syncLrc ?: lrcLib ?: netEase
+    }
+
+    private fun fetchFromNetEase(track: TrackInfo): FetchResult? {
+        val result = try {
+            NetEaseClient.getLyrics(track.title, track.artist, track.durationMs)
+        } catch (_: Exception) {
+            null
+        } ?: return null
+
+        if (result.synced) {
+            val lines = LrcParser.parse(result.lyrics)
+            val hasRealText = lines.any { it.text != "♪" && it.text.isNotBlank() }
+            return if (hasRealText) FetchResult(lines, LyricsStatus.FOUND, "NetEase · Synced") else null
+        }
+
+        val lines = result.lyrics.lines()
+            .filter { it.isNotBlank() }
+            .map { text -> LyricLine(0L, text) }
+        return if (lines.isNotEmpty()) FetchResult(lines, LyricsStatus.PLAIN_ONLY, "NetEase · Plain") else null
+    }
 
     private fun fetchFromSyncLrc(track: TrackInfo): FetchResult? {
         val result = try {

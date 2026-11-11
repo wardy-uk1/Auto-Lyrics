@@ -13,7 +13,9 @@
 | **Synced lyrics** | Line-level timestamps (standard LRC). `LyricsStatus.FOUND`. |
 | **Plain lyrics** / **Unsynced** | No timestamps. `LyricsStatus.PLAIN_ONLY`. Scrolled proportionally based on song duration. |
 | **SyncLRC** | Primary lyrics API: `synclrc.tharuk.pro`. Provides karaoke, synced, and plain lyrics. |
-| **LRCLIB** | Fallback lyrics API: `lrclib.net`. Provides synced and plain lyrics. |
+| **LRCLIB** | Second lyrics API: `lrclib.net`. Provides synced and plain lyrics. |
+| **NetEase** | Third lyrics API: `music.163.com`. Provides synced and plain lyrics. Only matched when title + artist agree. |
+| **Big lyrics** (AA) | Swaps the now-playing card text: lyric in the large title slot, "Song — Artist" in the small subtitle slot. Pref `aa_big_lyrics`. |
 | **AA offset** | A separate lyrics delay setting specific to Android Auto, stored as `aa_offset_ms` in SharedPreferences. |
 | **Phone sync** | The global lyrics offset applied on the phone, managed by `MediaTracker.offsetMs`. |
 
@@ -55,7 +57,8 @@ AutoLyricsApp (Application)
 | `media/MediaTracker.kt` | Singleton. Tracks active media session, fetches lyrics, manages offset, emits `StateFlow<LyricsState>`. |
 | `media/MediaListenerService.kt` | `NotificationListenerService` — detects media sessions. |
 | `lyrics/SyncLrcClient.kt` | HTTP client for SyncLRC API (primary source). |
-| `lyrics/LrcLibClient.kt` | HTTP client for LRCLIB API (fallback source). |
+| `lyrics/LrcLibClient.kt` | HTTP client for LRCLIB API (second source). |
+| `lyrics/NetEaseClient.kt` | HTTP client for NetEase Cloud Music (third source). Search + strict title/artist/duration match, then LRC fetch. |
 | `lyrics/LrcParser.kt` | Parses LRC and ELRC format strings into `LyricLine` lists. |
 | `lyrics/MetadataCleaner.kt` | Normalizes track/artist strings for API queries. |
 | `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
@@ -106,6 +109,7 @@ AutoLyricsApp (Application)
 | `lyrics_font_family` | String | `sans-serif` | Phone lyrics font family. |
 | `aa_karaoke_enabled` | Boolean | true | Toggle karaoke bracket display on AA. |
 | `aa_offset_ms` | Long | 0 | Android Auto-specific lyrics delay (ms). |
+| `aa_big_lyrics` | Boolean | true | Show the lyric big and the song name small on the AA now-playing card. |
 
 ## Karaoke Bracket Logic (AA)
 
@@ -118,5 +122,7 @@ The bracket display uses **monotonic advancement** to avoid visual jitter:
 ## Lyrics Fetch Priority
 
 1. **SyncLRC** (`synclrc.tharuk.pro`) — returns karaoke (ELRC), synced (LRC), or plain text.
-2. **LRCLIB** (`lrclib.net`) — fallback, returns synced (LRC) or plain text.
-3. Within a response, preference: karaoke > synced > plain.
+2. **LRCLIB** (`lrclib.net`) — returns synced (LRC) or plain text.
+3. **NetEase** (`music.163.com`) — returns synced (LRC) or plain text.
+4. Synced from any source beats plain from any source: a later source is only asked when earlier ones had no synced lyrics (`MediaTracker.fetchFromAllSources`).
+5. Within a SyncLRC response, preference: karaoke > synced > plain.

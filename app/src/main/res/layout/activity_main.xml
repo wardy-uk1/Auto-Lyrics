@@ -347,6 +347,28 @@
                 android:layout_height="wrap_content" />
         </LinearLayout>
 
+        <!-- AA Big lyrics toggle -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Big Lyrics (song name small)"
+                android:textColor="#CCCCDD"
+                android:textSize="13sp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_aa_big_lyrics"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
         <!-- Translation toggle -->
         <LinearLayout
             android:layout_width="match_parent"
