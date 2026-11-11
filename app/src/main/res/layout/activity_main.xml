@@ -36,6 +36,58 @@
             android:paddingTop="4dp" />
     </LinearLayout>
 
+    <!-- Update available banner (hidden until an update is found) -->
+    <LinearLayout
+        android:id="@+id/layout_update_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#3D2A7A"
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tv_update_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="A new version is available"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_update_later"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:text="Later"
+            android:textSize="12sp"
+            android:textColor="#CCCCDD"
+            android:textAllCaps="false"
+            android:minWidth="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            style="?attr/borderlessButtonStyle" />
+
+        <Button
+            android:id="@+id/btn_update_install"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:text="Update"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#7C4DFF"
+            android:textAllCaps="false"
+            android:minWidth="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp" />
+    </LinearLayout>
+
     <!-- Permission Status -->
     <TextView
         android:id="@+id/tv_status"
@@ -482,6 +534,20 @@
             android:layout_height="40dp"
             android:layout_marginTop="8dp"
             android:text="Restore settings…"
+            android:textSize="13sp"
+            android:textColor="#CCCCDD"
+            android:backgroundTint="#2A2A3E"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:textAllCaps="false"
+            style="?attr/materialButtonOutlinedStyle" />
+
+        <Button
+            android:id="@+id/btn_check_updates"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:text="Check for updates"
             android:textSize="13sp"
             android:textColor="#CCCCDD"
             android:backgroundTint="#2A2A3E"

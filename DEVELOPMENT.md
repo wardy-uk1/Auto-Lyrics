@@ -65,6 +65,7 @@ AutoLyricsApp (Application)
 | `media/CarDelayLearner.kt` | Learns the car's audio lag: when ≥3 songs' car Sync-tab nudges agree (≥70%, same sign, ≥150 ms, within 400 ms of the median), moves the median into `aa_offset_ms` and subtracts it from those songs' offsets. Prefs `aa_learn_delay`, `aa_learn_nudges`, `aa_learned_shift_ms`. |
 | `media/AppFilter.kt` | Remembers every app seen with a media session and which ones the user has unticked (prefs `seen_packages`, `ignored_packages`). |
 | `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
+| `util/UpdateChecker.kt` | Checks `api.github.com/repos/wardy-uk1/Auto-Lyrics/releases/latest` (every 6 h from `MediaListenerService`'s watchdog, and on app start), notifies once per version, downloads the `auto-lyrics-*.apk` asset to `cache/updates/` and opens the installer via the `${applicationId}.updates` FileProvider. Needs `REQUEST_INSTALL_PACKAGES` and `POST_NOTIFICATIONS`. |
 | `util/BackupManager.kt` | Exports/imports `auto_lyrics_prefs`, `song_offsets` and pinned lyrics cache files as one JSON file (typed values). |
 | `util/AlbumColorExtractor.kt` | Extracts `AlbumColors` from album art bitmaps using AndroidX Palette. |
 | `auto/LyricsBrowserService.kt` | Android Auto integration. Browse tree, MediaSession metadata/playback, karaoke brackets, transport proxy. |

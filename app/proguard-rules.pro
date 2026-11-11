@@ -23,3 +23,7 @@
 -keepattributes EnclosingMethod,InnerClasses
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
+
+# Update checker (GitHub releases JSON)
+-keep class com.autolyrics.util.UpdateChecker$Release { *; }
+-keep class com.autolyrics.util.UpdateChecker$Asset { *; }

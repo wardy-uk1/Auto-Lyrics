@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.autolyrics.util.UpdateChecker
 
 class MediaListenerService : NotificationListenerService() {
 
@@ -22,6 +23,7 @@ class MediaListenerService : NotificationListenerService() {
     private val watchdog = object : Runnable {
         override fun run() {
             updateSessions()
+            maybeCheckForUpdate()
             handler.postDelayed(this, WATCHDOG_MS)
         }
     }
@@ -98,6 +100,21 @@ class MediaListenerService : NotificationListenerService() {
                 ?: filtered.first()
 
         tracker.onMediaSessionChanged(best)
+    }
+
+    @Volatile private var updateCheckRunning = false
+
+    /** Checks GitHub for a new version every few hours, in the background. */
+    private fun maybeCheckForUpdate() {
+        if (updateCheckRunning || !UpdateChecker.isCheckDue(this)) return
+        updateCheckRunning = true
+        Thread {
+            try {
+                UpdateChecker.checkAndNotify(applicationContext)
+            } finally {
+                updateCheckRunning = false
+            }
+        }.start()
     }
 
     private fun isBusy(controller: MediaController): Boolean {

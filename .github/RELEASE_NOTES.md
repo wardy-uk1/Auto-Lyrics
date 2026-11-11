@@ -16,7 +16,11 @@ Future updates install normally.
 2. Open Auto Lyrics and tap **Grant Notification Access**.
 3. For the car: turn on Android Auto's **developer mode** and tick **Unknown sources** — step-by-step guide in the [README](https://github.com/wardy-uk1/Auto-Lyrics#4-turn-on-android-autos-developer-mode-needed-for-the-car).
 
-## What's new in 2.0
+## What's new in 2.1
+
+- **Update checker** — Auto Lyrics now tells you when a new version is out, with a banner in the app and a phone notification. Tap **Update** to download and install it in one go (the first time, Android asks you to allow Auto Lyrics to install apps). There's also **Check for updates** in settings.
+
+## New in 2.0
 
 - **Learns your car's audio delay automatically** — when several songs all need the same timing nudge on the car's Sync tab, Auto Lyrics moves it into *Car delay* so every future song is in time. Switch: *Learn car delay automatically*.
 - **Signed with the project's own key.**

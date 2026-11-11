@@ -44,6 +44,10 @@ import com.autolyrics.model.AlbumColors
 import com.autolyrics.model.LyricsState
 import com.autolyrics.model.LyricsStatus
 import com.autolyrics.util.BackupManager
+import com.autolyrics.util.UpdateChecker
+import android.net.Uri
+import android.os.Build
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -93,6 +97,133 @@ class MainActivity : AppCompatActivity() {
                 recreate()   // reload the screen with the restored settings
             }
         }
+
+    // ---- Update checker ----
+    private lateinit var updateBanner: LinearLayout
+    private lateinit var tvUpdateText: TextView
+    private lateinit var btnUpdateInstall: Button
+    private var updateDownloading = false
+    private var installAfterPermission: UpdateChecker.UpdateInfo? = null
+
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* nothing else to do */ }
+
+    private fun setupUpdateChecker() {
+        updateBanner = findViewById(R.id.layout_update_banner)
+        tvUpdateText = findViewById(R.id.tv_update_text)
+        btnUpdateInstall = findViewById(R.id.btn_update_install)
+        findViewById<Button>(R.id.btn_update_later).setOnClickListener {
+            UpdateChecker.pendingUpdate(this)?.let { UpdateChecker.dismiss(this, it.version) }
+            updateBanner.visibility = View.GONE
+        }
+        btnUpdateInstall.setOnClickListener {
+            UpdateChecker.pendingUpdate(this, includeDismissed = true)?.let { startUpdate(it) }
+        }
+        findViewById<Button>(R.id.btn_check_updates).setOnClickListener { checkForUpdates(manual = true) }
+
+        // Ask once for permission to show the "update available" notification (Android 13+)
+        if (Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("asked_notification_permission", false)) {
+            prefs.edit().putBoolean("asked_notification_permission", true).apply()
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        showUpdateBanner()
+        if (UpdateChecker.isCheckDue(this)) checkForUpdates(manual = false)
+        handleUpdateIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleUpdateIntent(intent)
+    }
+
+    /** Opened from the "update available" notification: start the update straight away. */
+    private fun handleUpdateIntent(intent: Intent?) {
+        val i = intent ?: return
+        if (!i.getBooleanExtra(UpdateChecker.EXTRA_START_UPDATE, false)) return
+        i.removeExtra(UpdateChecker.EXTRA_START_UPDATE)
+        UpdateChecker.pendingUpdate(this, includeDismissed = true)?.let { startUpdate(it) }
+    }
+
+    private fun showUpdateBanner() {
+        if (updateDownloading) return
+        val info = UpdateChecker.pendingUpdate(this)
+        if (info == null) {
+            updateBanner.visibility = View.GONE
+            return
+        }
+        tvUpdateText.text = "Auto Lyrics ${info.version} is available"
+        btnUpdateInstall.isEnabled = true
+        updateBanner.visibility = View.VISIBLE
+    }
+
+    private fun checkForUpdates(manual: Boolean) {
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try { Result.success(UpdateChecker.fetchNewer(this@MainActivity)) } catch (e: Exception) { Result.failure(e) }
+            }
+            val info = result.getOrNull()
+            if (info != null) {
+                if (manual) {
+                    UpdateChecker.dismiss(this@MainActivity, "")   // un-dismiss so the banner shows
+                }
+                showUpdateBanner()
+            } else if (manual) {
+                val msg = if (result.isFailure) "Couldn't check for updates — are you online?"
+                else "You're on the latest version (${UpdateChecker.installedVersion(this@MainActivity)})"
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun startUpdate(info: UpdateChecker.UpdateInfo) {
+        if (updateDownloading) return
+        // Android needs permission for Auto Lyrics to install its own updates
+        if (!packageManager.canRequestPackageInstalls()) {
+            installAfterPermission = info
+            AlertDialog.Builder(this)
+                .setTitle("Allow updates")
+                .setMessage("To install updates, allow Auto Lyrics to install apps on the next screen, then come back.")
+                .setPositiveButton("Continue") { _, _ ->
+                    startActivity(
+                        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+                    )
+                }
+                .setNegativeButton("Cancel") { _, _ -> installAfterPermission = null }
+                .show()
+            return
+        }
+
+        updateDownloading = true
+        updateBanner.visibility = View.VISIBLE
+        btnUpdateInstall.isEnabled = false
+        tvUpdateText.text = "Downloading ${info.version}…"
+        lifecycleScope.launch {
+            val file = withContext(Dispatchers.IO) {
+                UpdateChecker.downloadApk(this@MainActivity, info) { pct ->
+                    runOnUiThread { tvUpdateText.text = "Downloading ${info.version}… $pct%" }
+                }
+            }
+            updateDownloading = false
+            if (file == null) {
+                tvUpdateText.text = "Download failed — tap Update to try again"
+                btnUpdateInstall.isEnabled = true
+                return@launch
+            }
+            tvUpdateText.text = "Auto Lyrics ${info.version} is ready to install"
+            btnUpdateInstall.isEnabled = true
+            try {
+                val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.updates", file)
+                startActivity(
+                    Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, "application/vnd.android.package-archive")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Exception) {
+                Toast.makeText(this@MainActivity, "Couldn't open the installer", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     private fun appVersionName(): String = try {
         packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
@@ -248,6 +379,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btn_music_apps).setOnClickListener { showMusicAppsDialog() }
+        setupUpdateChecker()
         val switchLearn = findViewById<SwitchCompat>(R.id.switch_aa_learn_delay)
         switchLearn.isChecked = CarDelayLearner.isEnabled(this)
         switchLearn.setOnCheckedChangeListener { _, isChecked -> CarDelayLearner.setEnabled(this, isChecked) }
@@ -732,6 +864,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissionUi()
+        // Back from the "install unknown apps" settings screen: carry on with the update
+        installAfterPermission?.let { info ->
+            if (packageManager.canRequestPackageInstalls()) {
+                installAfterPermission = null
+                startUpdate(info)
+            }
+        }
+        if (::updateBanner.isInitialized) showUpdateBanner()
         // The car delay may have been learned while the app was in the background
         aaOffsetMs = prefs.getLong("aa_offset_ms", 0L)
         updateAaDelayDisplay()

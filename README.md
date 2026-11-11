@@ -26,6 +26,7 @@
 - **Wrong lyrics?** — pick the right lyrics from other search results; your choice is kept for that song
 - **Choose music apps** — untick apps you don't want followed (e.g. WhatsApp voice notes, podcasts)
 - **Back up & restore** your settings, song timings and picked lyrics
+- **Update checker** — a banner and notification when a new version is out; one tap downloads and installs it
 - Optional translation of non-English lyrics into English (off by default)
 
 **Lyrics sources:** [SyncLRC](https://synclrc.tharuk.pro), [LRCLIB](https://lrclib.net) and NetEase Cloud Music. Synced lyrics are always preferred over plain text, and messy titles from YouTube-based apps (several artists, "(Official Video)", "Artist - Song") are cleaned up automatically.
@@ -35,7 +36,7 @@
 ## Install
 
 ### 1. Download the app
-Go to the **[Releases page](../../releases/latest)** and download the `.apk` file (for example `auto-lyrics-2.0.0.apk`) on your phone.
+Go to the **[Releases page](../../releases/latest)** and download the `.apk` file (for example `auto-lyrics-2.1.0.apk`) on your phone.
 
 > **Already have the original Auto Lyrics installed?** Uninstall it first. Both apps use the same internal ID, so Android will refuse to install this one over it.
 >
