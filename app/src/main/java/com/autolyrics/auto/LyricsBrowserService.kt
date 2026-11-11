@@ -16,6 +16,7 @@ import androidx.media.MediaBrowserServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.autolyrics.R
+import com.autolyrics.media.CarDelayLearner
 import com.autolyrics.media.MediaTracker
 import com.autolyrics.model.LyricLine
 import com.autolyrics.model.LyricsState
@@ -259,7 +260,8 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             buildTextItem(
                 "sync_offset",
                 "This song: ${formatOffset(state.offsetMs)}",
-                subtitle = "Car delay (all songs): ${formatOffset(aaOffsetMs)}"
+                subtitle = "Car delay (all songs): ${formatOffset(aaOffsetMs)}" +
+                    if (CarDelayLearner.isEnabled(this) && CarDelayLearner.lastLearnedShift(this) != 0L) " · learned" else ""
             )
         )
 
@@ -745,6 +747,13 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             if (step != null || mediaId == SYNC_RESET_ID) {
                 if (step != null) mediaTracker.adjustOffset(step.deltaMs)
                 else mediaTracker.resetOffset()
+
+                // Learn the car's audio lag from nudges that several songs share
+                mediaTracker.currentSongKey()?.let { key ->
+                    CarDelayLearner.recordCarNudge(
+                        this@LyricsBrowserService, key, mediaTracker.state.value.offsetMs, mediaTracker
+                    )
+                }
                 resetKaraokeState()
                 notifyChildrenChanged(LYRICS_ID)
                 notifyChildrenChanged(SYNC_MENU_ID)

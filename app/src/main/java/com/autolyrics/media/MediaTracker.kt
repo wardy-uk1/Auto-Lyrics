@@ -67,6 +67,16 @@ class MediaTracker private constructor(context: Context) {
         return songOffsets.getLong(key, 0L)
     }
 
+    /** "title|artist" key of the song playing now (null if none). */
+    fun currentSongKey(): String? = songKey(_state.value.track)
+
+    /** Change the current song's timing in memory only (used when it was already saved elsewhere). */
+    fun setOffsetWithoutSaving(ms: Long) {
+        lyricsOffsetMs = ms
+        _state.value = _state.value.copy(offsetMs = lyricsOffsetMs)
+        updateCurrentPosition()
+    }
+
     private fun saveSongOffset(ms: Long) {
         val key = songKey(_state.value.track) ?: return
         if (ms == 0L) songOffsets.edit().remove(key).apply()

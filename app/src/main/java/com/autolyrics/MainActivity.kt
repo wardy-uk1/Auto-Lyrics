@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.autolyrics.media.AppFilter
+import com.autolyrics.media.CarDelayLearner
 import com.autolyrics.media.MediaListenerService
 import com.autolyrics.media.MediaTracker
 import com.autolyrics.model.AlbumColors
@@ -193,6 +194,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btn_music_apps).setOnClickListener { showMusicAppsDialog() }
+        val switchLearn = findViewById<SwitchCompat>(R.id.switch_aa_learn_delay)
+        switchLearn.isChecked = CarDelayLearner.isEnabled(this)
+        switchLearn.setOnCheckedChangeListener { _, isChecked -> CarDelayLearner.setEnabled(this, isChecked) }
         findViewById<Button>(R.id.btn_wrong_lyrics).setOnClickListener { showWrongLyricsPicker() }
         findViewById<Button>(R.id.btn_clear_cache).setOnClickListener { confirmClearCache() }
 
@@ -668,6 +672,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissionUi()
+        // The car delay may have been learned while the app was in the background
+        aaOffsetMs = prefs.getLong("aa_offset_ms", 0L)
+        updateAaDelayDisplay()
     }
 
     override fun onDestroy() {

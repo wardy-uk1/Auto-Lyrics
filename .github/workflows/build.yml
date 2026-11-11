@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -39,6 +39,17 @@ jobs:
 
       - name: Run unit tests
         run: gradle testDebugUnitTest
+
+      # Version 2 onwards must be signed with your own key: stop instead of
+      # silently falling back to the old shared key.
+      - name: Require own signing key for 2.x
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          MAJOR=${VERSION%%.*}
+          if [ "$MAJOR" -ge 2 ] && [ -z "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "::error::Version $VERSION needs your own signing key. Add the 4 SIGNING_* secrets (Settings -> Secrets and variables -> Actions), then re-run."
+            exit 1
+          fi
 
       - name: Decode signing key
         if: env.SIGNING_KEYSTORE_BASE64 != ''

@@ -62,6 +62,7 @@ AutoLyricsApp (Application)
 | `lyrics/NetEaseClient.kt` | HTTP client for NetEase Cloud Music (third source). Search + strict title/artist/duration match, then LRC fetch. |
 | `lyrics/LrcParser.kt` | Parses LRC and ELRC format strings into `LyricLine` lists. |
 | `lyrics/MetadataCleaner.kt` | Normalizes track/artist strings for API queries. `searchVariants()` builds fallback queries: first artist only, brackets/feat./"- Remastered" removed, and "Artist - Song" titles split (for Metrolist / YouTube-based players). |
+| `media/CarDelayLearner.kt` | Learns the car's audio lag: when ≥3 songs' car Sync-tab nudges agree (≥70%, same sign, ≥150 ms, within 400 ms of the median), moves the median into `aa_offset_ms` and subtracts it from those songs' offsets. Prefs `aa_learn_delay`, `aa_learn_nudges`, `aa_learned_shift_ms`. |
 | `media/AppFilter.kt` | Remembers every app seen with a media session and which ones the user has unticked (prefs `seen_packages`, `ignored_packages`). |
 | `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
 | `util/AlbumColorExtractor.kt` | Extracts `AlbumColors` from album art bitmaps using AndroidX Palette. |

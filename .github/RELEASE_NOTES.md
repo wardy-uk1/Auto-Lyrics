@@ -1,17 +1,18 @@
+## ⚠️ Upgrading from 1.x? Uninstall first (one time only)
+
+Version 2 is signed with a new key, so Android won't install it over 1.x.
+**Uninstall Auto Lyrics, then install this version.** Afterwards, grant notification access again and re-set your car delay. Future updates install normally.
+
 ## Install
 
 1. Download **`auto-lyrics-*.apk`** below on your phone and open it to install.
-   *Already have the original Auto Lyrics? Uninstall it first.*
+   *Have the original Auto Lyrics (efrayim-dev) installed? Uninstall it first.*
 2. Open Auto Lyrics and tap **Grant Notification Access**.
 3. For the car: turn on Android Auto's **developer mode** and tick **Unknown sources** — step-by-step guide in the [README](https://github.com/wardy-uk1/Auto-Lyrics#4-turn-on-android-autos-developer-mode-needed-for-the-car).
 
-## What's in this version
+## What's new in 2.0
 
-- **Big lyrics in the car** — current line in large text on the now-playing screen, song name small
-- **Lyrics | Sync tabs** in Android Auto — current line plus the next 3; timing buttons with tidy icons
-- **Timing remembered per song**, from the phone or the car
-- **Wrong lyrics?** — pick the right lyrics from other results; kept for that song
-- **Three lyrics sources** — SyncLRC, LRCLIB and NetEase, with better matching for Metrolist / YouTube Music titles
-- **Choose music apps** — ignore apps such as WhatsApp or podcasts
-- Faded album-art background on the phone, new icon, fix for lyrics occasionally freezing
-- Translation now off by default; saved lyrics cleaned up automatically
+- **Learns your car's audio delay automatically** — when several songs all need the same timing nudge on the car's Sync tab, Auto Lyrics moves it into *Car delay* so every future song is in time. Switch: *Learn car delay automatically*.
+- Signed with the project's own key.
+
+Plus everything from 1.x: big lyrics in the car, Lyrics | Sync tabs, timing remembered per song, *Wrong lyrics?* picker, three lyrics sources, *Choose music apps*, faded album background and the new icon.
