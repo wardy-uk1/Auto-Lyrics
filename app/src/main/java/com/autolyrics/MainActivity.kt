@@ -30,6 +30,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.widget.SwitchCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
@@ -41,9 +42,62 @@ import com.autolyrics.media.MediaTracker
 import com.autolyrics.model.AlbumColors
 import com.autolyrics.model.LyricsState
 import com.autolyrics.model.LyricsStatus
+import com.autolyrics.util.BackupManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+
+    // ---- Back up / restore settings (file pickers) ----
+    private val backupLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            uri ?: return@registerForActivityResult
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    try {
+                        val json = BackupManager.createBackup(this@MainActivity, appVersionName())
+                        contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } != null
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+                Toast.makeText(
+                    this@MainActivity,
+                    if (ok) "Settings backed up" else "Couldn't save the backup",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+    private val restoreLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri ?: return@registerForActivityResult
+            lifecycleScope.launch {
+                val message = withContext(Dispatchers.IO) {
+                    try {
+                        val json = contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+                            ?: return@withContext "Couldn't read that file"
+                        val r = BackupManager.restoreBackup(this@MainActivity, json)
+                        "Restored ${r.settings} settings, ${r.songTimings} song timings " +
+                            "and ${r.pickedLyrics} picked lyrics"
+                    } catch (e: IllegalArgumentException) {
+                        e.message ?: "That file isn't an Auto Lyrics backup."
+                    } catch (_: Exception) {
+                        "Couldn't restore that backup"
+                    }
+                }
+                mediaTracker.reloadSongOffset()
+                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                recreate()   // reload the screen with the restored settings
+            }
+        }
+
+    private fun appVersionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (_: Exception) {
+        "?"
+    }
 
     private lateinit var mediaTracker: MediaTracker
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -193,6 +247,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btn_music_apps).setOnClickListener { showMusicAppsDialog() }
+        findViewById<Button>(R.id.btn_backup).setOnClickListener {
+            backupLauncher.launch("auto-lyrics-backup.json")
+        }
+        findViewById<Button>(R.id.btn_restore).setOnClickListener {
+            restoreLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+        }
         findViewById<Button>(R.id.btn_wrong_lyrics).setOnClickListener { showWrongLyricsPicker() }
         findViewById<Button>(R.id.btn_clear_cache).setOnClickListener { confirmClearCache() }
 

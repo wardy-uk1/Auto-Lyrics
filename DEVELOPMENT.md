@@ -64,6 +64,7 @@ AutoLyricsApp (Application)
 | `lyrics/MetadataCleaner.kt` | Normalizes track/artist strings for API queries. `searchVariants()` builds fallback queries: first artist only, brackets/feat./"- Remastered" removed, and "Artist - Song" titles split (for Metrolist / YouTube-based players). |
 | `media/AppFilter.kt` | Remembers every app seen with a media session and which ones the user has unticked (prefs `seen_packages`, `ignored_packages`). |
 | `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
+| `util/BackupManager.kt` | Exports/imports `auto_lyrics_prefs`, `song_offsets` and pinned lyrics cache files as one JSON file (typed values). |
 | `util/AlbumColorExtractor.kt` | Extracts `AlbumColors` from album art bitmaps using AndroidX Palette. |
 | `auto/LyricsBrowserService.kt` | Android Auto integration. Browse tree, MediaSession metadata/playback, karaoke brackets, transport proxy. |
 | `auto/BootReceiver.kt` | Starts `LyricsBrowserService` on `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`. |

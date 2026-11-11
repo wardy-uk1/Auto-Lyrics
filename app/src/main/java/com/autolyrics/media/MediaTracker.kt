@@ -67,6 +67,13 @@ class MediaTracker private constructor(context: Context) {
         return songOffsets.getLong(key, 0L)
     }
 
+    /** Re-read the current song's saved timing (e.g. after restoring a backup). */
+    fun reloadSongOffset() {
+        lyricsOffsetMs = loadSongOffset(_state.value.track)
+        _state.value = _state.value.copy(offsetMs = lyricsOffsetMs)
+        updateCurrentPosition()
+    }
+
     private fun saveSongOffset(ms: Long) {
         val key = songKey(_state.value.track) ?: return
         if (ms == 0L) songOffsets.edit().remove(key).apply()

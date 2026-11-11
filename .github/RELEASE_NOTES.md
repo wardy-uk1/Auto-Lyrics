@@ -5,7 +5,11 @@
 2. Open Auto Lyrics and tap **Grant Notification Access**.
 3. For the car: turn on Android Auto's **developer mode** and tick **Unknown sources** — step-by-step guide in the [README](https://github.com/wardy-uk1/Auto-Lyrics#4-turn-on-android-autos-developer-mode-needed-for-the-car).
 
-## What's in this version
+## New in 1.15
+
+- **Back up & restore settings** — save your settings, per-song timings and hand-picked lyrics to a file (*Back up settings…* in settings), and bring them back after reinstalling with *Restore settings…*. **Do this before upgrading to version 2.0**, which needs a one-time reinstall.
+
+## Also in this version
 
 - **Big lyrics in the car** — current line in large text on the now-playing screen, song name small
 - **Lyrics | Sync tabs** in Android Auto — current line plus the next 3; timing buttons with tidy icons
