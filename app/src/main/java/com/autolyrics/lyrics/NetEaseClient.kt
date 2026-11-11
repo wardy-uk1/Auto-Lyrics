@@ -74,6 +74,11 @@ object NetEaseClient {
 
     fun getLyrics(trackName: String, artistName: String, durationMs: Long): NetEaseResult? {
         val songId = findSongId(trackName, artistName, durationMs) ?: return null
+        return lyricsForSong(songId)
+    }
+
+    /** Lyrics for a specific NetEase song id (credit lines removed). */
+    fun lyricsForSong(songId: Long): NetEaseResult? {
         val raw = fetchLyric(songId) ?: return null
 
         val cleaned = raw.lines()
@@ -99,6 +104,13 @@ object NetEaseClient {
 
     private fun findSongId(trackName: String, artistName: String, durationMs: Long): Long? {
         val query = if (artistName.isNotBlank()) "$trackName $artistName" else trackName
+        val songs = searchSongs(query)
+        if (songs.isEmpty()) return null
+        return pickBest(songs, trackName, artistName, durationMs)
+    }
+
+    /** Raw NetEase search results for a free-text query (used by the picker too). */
+    fun searchSongs(query: String): List<Song> {
         val body = FormBody.Builder()
             .add("s", query)
             .add("type", "1")
@@ -113,16 +125,19 @@ object NetEaseClient {
             .header("Referer", REFERER)
             .build()
 
-        val songs = try {
+        return try {
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val json = response.body?.string() ?: return null
-                gson.fromJson(json, SearchResponse::class.java)?.result?.songs
+                if (!response.isSuccessful) return emptyList()
+                val json = response.body?.string() ?: return emptyList()
+                gson.fromJson(json, SearchResponse::class.java)?.result?.songs.orEmpty()
+                    .filter { it.id != null && !it.name.isNullOrBlank() }
             }
         } catch (_: Exception) {
-            null
-        } ?: return null
+            emptyList()
+        }
+    }
 
+    private fun pickBest(songs: List<Song>, trackName: String, artistName: String, durationMs: Long): Long? {
         val wantTitle = normalize(trackName)
         val wantArtist = normalize(artistName)
 

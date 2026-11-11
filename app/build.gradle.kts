@@ -11,8 +11,8 @@ android {
         applicationId = "com.autolyrics"
         minSdk = 26
         targetSdk = 34
-        versionCode = 35
-        versionName = "1.13.0"
+        versionCode = 36
+        versionName = "1.14.0"
     }
 
     signingConfigs {
@@ -22,6 +22,18 @@ android {
             keyAlias = "autolyrics"
             keyPassword = "autolyrics"
         }
+        // Your own private key. GitHub Actions writes it from repository secrets
+        // (see .github/workflows/build.yml); never commit the key itself.
+        create("release") {
+            val storePath = System.getenv("SIGNING_STORE_FILE")
+            if (storePath != null && file(storePath).exists()) {
+                storeFile = file(storePath)
+                storeType = "pkcs12"
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -30,7 +42,9 @@ android {
         }
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("debug")
+            isShrinkResources = true
+            val hasOwnKey = System.getenv("SIGNING_STORE_FILE")?.let { file(it).exists() } == true
+            signingConfig = signingConfigs.getByName(if (hasOwnKey) "release" else "debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -45,6 +59,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -71,4 +89,7 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Unit tests (run by GitHub Actions on every push)
+    testImplementation("junit:junit:4.13.2")
 }

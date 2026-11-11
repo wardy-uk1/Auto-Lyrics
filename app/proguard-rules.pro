@@ -18,3 +18,8 @@
 # MediaBrowserService
 -keep class androidx.media.** { *; }
 -keep class android.support.v4.media.** { *; }
+
+# Gson generic types (LRCLIB search uses TypeToken<List<...>>)
+-keepattributes EnclosingMethod,InnerClasses
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken

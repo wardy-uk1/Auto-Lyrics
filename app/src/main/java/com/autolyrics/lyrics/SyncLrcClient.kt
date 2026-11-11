@@ -16,7 +16,7 @@ object SyncLrcClient {
 
     private val gson = Gson()
     private const val BASE_URL = "https://synclrc.tharuk.pro"
-    private const val USER_AGENT = "AutoLyrics v1.4 (https://github.com/efrayim-dev/auto-lyrics)"
+    private const val USER_AGENT = "AutoLyrics (https://github.com/wardy-uk1/Auto-Lyrics)"
 
     data class SyncLrcResponse(
         @SerializedName("id") val id: String?,

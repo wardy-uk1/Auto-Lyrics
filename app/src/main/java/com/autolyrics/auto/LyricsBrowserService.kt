@@ -255,7 +255,13 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         state: LyricsState,
         items: MutableList<MediaBrowserCompat.MediaItem>
     ) {
-        items.add(buildTextItem("sync_offset", "Car delay: ${formatOffset(aaOffsetMs)}"))
+        items.add(
+            buildTextItem(
+                "sync_offset",
+                "This song: ${formatOffset(state.offsetMs)}",
+                subtitle = "Car delay (all songs): ${formatOffset(aaOffsetMs)}"
+            )
+        )
 
         if (state.lines.isNotEmpty()) {
             val posMs = getAaPositionMs()
@@ -284,7 +290,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         for ((id, step) in SYNC_STEPS) {
             items.add(buildTextItem(id, step.label, icon = iconBitmap(step.icon)))
         }
-        items.add(buildTextItem(SYNC_RESET_ID, "Reset to 0", icon = iconBitmap(R.drawable.ic_aa_reset)))
+        items.add(buildTextItem(SYNC_RESET_ID, "Reset this song", icon = iconBitmap(R.drawable.ic_aa_reset)))
     }
 
     private val iconCache = mutableMapOf<Int, Bitmap?>()
@@ -734,11 +740,12 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
             if (mediaId == null) return
 
+            // Car sync buttons adjust the current song's timing (remembered per song)
             val step = SYNC_STEPS[mediaId]
             if (step != null || mediaId == SYNC_RESET_ID) {
-                aaOffsetMs = if (step != null) aaOffsetMs + step.deltaMs else 0L
-                getSharedPreferences("auto_lyrics_prefs", MODE_PRIVATE)
-                    .edit().putLong("aa_offset_ms", aaOffsetMs).apply()
+                if (step != null) mediaTracker.adjustOffset(step.deltaMs)
+                else mediaTracker.resetOffset()
+                resetKaraokeState()
                 notifyChildrenChanged(LYRICS_ID)
                 notifyChildrenChanged(SYNC_MENU_ID)
                 return

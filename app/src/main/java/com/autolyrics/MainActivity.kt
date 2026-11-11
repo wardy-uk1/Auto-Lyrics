@@ -28,6 +28,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.widget.SwitchCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -192,6 +193,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btn_music_apps).setOnClickListener { showMusicAppsDialog() }
+        findViewById<Button>(R.id.btn_wrong_lyrics).setOnClickListener { showWrongLyricsPicker() }
+        findViewById<Button>(R.id.btn_clear_cache).setOnClickListener { confirmClearCache() }
 
         val switchAaBigLyrics = findViewById<SwitchCompat>(R.id.switch_aa_big_lyrics)
         switchAaBigLyrics.isChecked = prefs.getBoolean("aa_big_lyrics", true)
@@ -200,7 +203,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         switchTranslation = findViewById(R.id.switch_translation)
-        switchTranslation.isChecked = prefs.getBoolean("translation_enabled", true)
+        switchTranslation.isChecked = prefs.getBoolean("translation_enabled", false)
         switchTranslation.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("translation_enabled", isChecked).apply()
         }
@@ -343,6 +346,71 @@ class MainActivity : AppCompatActivity() {
             ivAlbumArt.setImageDrawable(null)
             ivAlbumArt.visibility = View.GONE
         }
+    }
+
+    /** "Wrong lyrics?": search more widely and let the user pick the right lyrics for this song. */
+    private fun showWrongLyricsPicker() {
+        val track = mediaTracker.state.value.track
+        if (track == null) {
+            Toast.makeText(this, "Play a song first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val searching = AlertDialog.Builder(this)
+            .setTitle("Searching…")
+            .setMessage("Looking for other lyrics for \"${track.title}\"")
+            .setNegativeButton("Cancel", null)
+            .show()
+
+        lifecycleScope.launch {
+            val candidates = mediaTracker.findLyricsCandidates()
+            if (!searching.isShowing) return@launch
+            searching.dismiss()
+
+            val builder = AlertDialog.Builder(this@MainActivity)
+                .setTitle("Pick the right lyrics")
+                .setNeutralButton("Use automatic") { _, _ -> mediaTracker.useAutomaticLyrics() }
+                .setNegativeButton("Cancel", null)
+
+            if (candidates.isEmpty()) {
+                builder.setMessage("No other lyrics found for this song.").show()
+                return@launch
+            }
+
+            val labels = candidates.map { c ->
+                val kind = when (c.synced) {
+                    true -> "synced"
+                    false -> "not synced"
+                    null -> "?"
+                }
+                val time = if (c.durationSec > 0) " · %d:%02d".format(c.durationSec / 60, c.durationSec % 60) else ""
+                "${c.title} — ${c.artist}\n${c.source} · $kind$time"
+            }.toTypedArray()
+
+            builder.setItems(labels) { _, which ->
+                mediaTracker.applyLyricsCandidate(candidates[which]) { ok ->
+                    Toast.makeText(
+                        this@MainActivity,
+                        if (ok) "Lyrics saved for this song" else "Couldn't load those lyrics, try another",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }.show()
+        }
+    }
+
+    private fun confirmClearCache() {
+        AlertDialog.Builder(this)
+            .setTitle("Clear saved lyrics?")
+            .setMessage("Saved lyrics will be downloaded again when songs play. " +
+                "Lyrics you picked with \"Wrong lyrics?\" are kept.")
+            .setPositiveButton("Clear") { _, _ ->
+                lifecycleScope.launch {
+                    val n = mediaTracker.clearSavedLyrics()
+                    Toast.makeText(this@MainActivity, "Cleared $n saved songs", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /** Tick-list of every app that has played audio; unticked apps are ignored. */
@@ -496,7 +564,7 @@ class MainActivity : AppCompatActivity() {
             offsetMs > 0 -> "+"
             else -> ""
         }
-        tvDelay.text = "Phone Sync: ${sign}${offsetMs}ms"
+        tvDelay.text = "This song: ${sign}${offsetMs}ms"
     }
 
     private fun renderSyncedLyrics(state: LyricsState) {

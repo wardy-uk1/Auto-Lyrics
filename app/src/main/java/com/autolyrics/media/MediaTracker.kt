@@ -49,9 +49,28 @@ class MediaTracker private constructor(context: Context) {
     private var pendingArt: Bitmap? = null
     private var lyricsOffsetMs: Long = 0L
 
+    /** Per-song lyric timing, keyed by "title|artist". */
+    private val songOffsets: SharedPreferences =
+        context.getSharedPreferences("song_offsets", Context.MODE_PRIVATE)
+
+    private fun songKey(track: TrackInfo?): String? {
+        track ?: return null
+        return "${track.title.lowercase().trim()}|${track.artist.lowercase().trim()}"
+    }
+
     init {
-        lyricsOffsetMs = prefs.getLong("lyrics_offset_ms", 0L)
-        _state.value = _state.value.copy(offsetMs = lyricsOffsetMs)
+        scope.launch(Dispatchers.IO) { lyricsCache.prune() }
+    }
+
+    private fun loadSongOffset(track: TrackInfo?): Long {
+        val key = songKey(track) ?: return 0L
+        return songOffsets.getLong(key, 0L)
+    }
+
+    private fun saveSongOffset(ms: Long) {
+        val key = songKey(_state.value.track) ?: return
+        if (ms == 0L) songOffsets.edit().remove(key).apply()
+        else songOffsets.edit().putLong(key, ms).apply()
     }
 
     private val positionChecker = object : Runnable {
@@ -70,8 +89,10 @@ class MediaTracker private constructor(context: Context) {
         if (track.title == current?.title && track.artist == current.artist) return@Runnable
 
         translationJob?.cancel()
+        lyricsOffsetMs = loadSongOffset(track)
         _state.value = _state.value.copy(
             track = track,
+            offsetMs = lyricsOffsetMs,
             lines = emptyList(),
             currentIndex = -1,
             currentWordIndex = -1,
@@ -100,16 +121,17 @@ class MediaTracker private constructor(context: Context) {
         }
     }
 
+    // Timing adjustments are remembered for the current song only.
     fun adjustOffset(deltaMs: Long) {
         lyricsOffsetMs += deltaMs
-        prefs.edit().putLong("lyrics_offset_ms", lyricsOffsetMs).apply()
+        saveSongOffset(lyricsOffsetMs)
         _state.value = _state.value.copy(offsetMs = lyricsOffsetMs)
         updateCurrentPosition()
     }
 
     fun resetOffset() {
         lyricsOffsetMs = 0L
-        prefs.edit().putLong("lyrics_offset_ms", 0L).apply()
+        saveSongOffset(0L)
         _state.value = _state.value.copy(offsetMs = lyricsOffsetMs)
         updateCurrentPosition()
     }
@@ -120,7 +142,7 @@ class MediaTracker private constructor(context: Context) {
 
     fun setOffset(ms: Long) {
         lyricsOffsetMs = ms
-        prefs.edit().putLong("lyrics_offset_ms", lyricsOffsetMs).apply()
+        saveSongOffset(lyricsOffsetMs)
         _state.value = _state.value.copy(offsetMs = lyricsOffsetMs)
         updateCurrentPosition()
     }
@@ -295,7 +317,7 @@ class MediaTracker private constructor(context: Context) {
                     }
 
                     val cacheAge = lyricsCache.getAge(track.title, track.artist)
-                    if (cacheAge < CACHE_REFRESH_MS) {
+                    if (cacheAge < CACHE_REFRESH_MS || lyricsCache.isPinned(track.title, track.artist)) {
                         prefetchNextSong()
                         return@launch
                     }
@@ -382,7 +404,7 @@ class MediaTracker private constructor(context: Context) {
         }
     }
 
-    private data class FetchResult(
+    internal data class FetchResult(
         val lines: List<LyricLine>,
         val status: LyricsStatus,
         val source: String
@@ -498,7 +520,7 @@ class MediaTracker private constructor(context: Context) {
     }
 
     private fun translateIfNeeded(lines: List<LyricLine>, track: TrackInfo) {
-        if (!prefs.getBoolean("translation_enabled", true)) return
+        if (!prefs.getBoolean("translation_enabled", false)) return
         translationJob?.cancel()
         translationJob = scope.launch(Dispatchers.IO) {
             try {
@@ -514,6 +536,139 @@ class MediaTracker private constructor(context: Context) {
             } catch (_: Exception) { }
         }
     }
+
+    // ---- "Wrong lyrics?" picker ----
+
+    /** One alternative set of lyrics the user can choose from. */
+    class LyricsCandidate internal constructor(
+        val title: String,
+        val artist: String,
+        val durationSec: Int,
+        /** true/false when known up front (LRCLIB); null when only known after loading (NetEase). */
+        val synced: Boolean?,
+        val source: String,
+        internal val loader: () -> FetchResult?
+    )
+
+    /** Searches LRCLIB and NetEase more broadly than the automatic lookup and returns the options. */
+    suspend fun findLyricsCandidates(): List<LyricsCandidate> = withContext(Dispatchers.IO) {
+        val track = _state.value.track ?: return@withContext emptyList()
+        val primary = MetadataCleaner.primaryArtist(track.artist)
+        val stripped = MetadataCleaner.stripTitleExtras(track.title)
+
+        // LRCLIB returns the lyrics with the search results
+        val lrcLib = LinkedHashMap<Int, LrcLibClient.LrcLibResponse>()
+        val lrcResults = try {
+            LrcLibClient.search(track.title, track.artist) +
+                LrcLibClient.search(stripped, primary) +
+                LrcLibClient.searchQuery("$stripped $primary")
+        } catch (_: Exception) {
+            emptyList()
+        }
+        for (r in lrcResults) {
+            val id = r.id ?: continue
+            if (r.syncedLyrics == null && r.plainLyrics == null) continue
+            lrcLib.putIfAbsent(id, r)
+        }
+
+        fun lrcCandidate(r: LrcLibClient.LrcLibResponse) = LyricsCandidate(
+            title = r.trackName ?: "?",
+            artist = r.artistName ?: "",
+            durationSec = r.duration ?: 0,
+            synced = r.syncedLyrics != null,
+            source = "LRCLIB",
+            loader = {
+                val synced = r.syncedLyrics?.let { LrcParser.parse(it) }
+                    ?.takeIf { lines -> lines.any { it.text != "♪" && it.text.isNotBlank() } }
+                if (synced != null) {
+                    FetchResult(synced, LyricsStatus.FOUND, "LRCLIB · Synced")
+                } else {
+                    r.plainLyrics?.lines()?.filter { it.isNotBlank() }?.map { LyricLine(0L, it) }
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { FetchResult(it, LyricsStatus.PLAIN_ONLY, "LRCLIB · Plain") }
+                }
+            }
+        )
+
+        val netEase = try {
+            NetEaseClient.searchSongs("$stripped $primary").take(8)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val netEaseCandidates = netEase.mapNotNull { song ->
+            val id = song.id ?: return@mapNotNull null
+            LyricsCandidate(
+                title = song.name ?: "?",
+                artist = song.artists.orEmpty().mapNotNull { it.name }.joinToString(", "),
+                durationSec = ((song.duration ?: 0L) / 1000).toInt(),
+                synced = null,
+                source = "NetEase",
+                loader = {
+                    NetEaseClient.lyricsForSong(id)?.let { res ->
+                        if (res.synced) {
+                            LrcParser.parse(res.lyrics)
+                                .takeIf { lines -> lines.any { it.text != "♪" && it.text.isNotBlank() } }
+                                ?.let { FetchResult(it, LyricsStatus.FOUND, "NetEase · Synced") }
+                        } else {
+                            res.lyrics.lines().filter { it.isNotBlank() }.map { LyricLine(0L, it) }
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { FetchResult(it, LyricsStatus.PLAIN_ONLY, "NetEase · Plain") }
+                        }
+                    }
+                }
+            )
+        }
+
+        val lrcSynced = lrcLib.values.filter { it.syncedLyrics != null }.map { lrcCandidate(it) }
+        val lrcPlain = lrcLib.values.filter { it.syncedLyrics == null }.map { lrcCandidate(it) }
+        (lrcSynced + netEaseCandidates + lrcPlain).take(25)
+    }
+
+    /**
+     * Loads the chosen lyrics, shows them, and pins them for this song so the
+     * automatic lookup never replaces them. Calls [onDone] with true on success.
+     */
+    fun applyLyricsCandidate(candidate: LyricsCandidate, onDone: (Boolean) -> Unit) {
+        val track = _state.value.track ?: return onDone(false)
+        fetchJob?.cancel()
+        fetchJob = scope.launch(Dispatchers.IO) {
+            val result = try { candidate.loader() } catch (_: Exception) { null }
+            withContext(Dispatchers.Main) {
+                if (result == null || _state.value.track != track) {
+                    onDone(false)
+                    return@withContext
+                }
+                lyricsCache.put(track.title, track.artist, result.lines, result.status, result.source, pinned = true)
+                _state.value = _state.value.copy(
+                    lines = result.lines,
+                    currentIndex = -1,
+                    currentWordIndex = -1,
+                    status = result.status,
+                    source = "${result.source} (your pick)",
+                    translatedLines = null,
+                    detectedLanguage = null
+                )
+                if (result.status == LyricsStatus.FOUND) updateCurrentPosition()
+                translateIfNeeded(result.lines, track)
+                onDone(true)
+            }
+        }
+    }
+
+    /** Forget the hand-picked lyrics for this song and look them up automatically again. */
+    fun useAutomaticLyrics() {
+        val track = _state.value.track ?: return
+        lyricsCache.delete(track.title, track.artist)
+        _state.value = _state.value.copy(
+            lines = emptyList(), currentIndex = -1, currentWordIndex = -1,
+            status = LyricsStatus.LOADING, source = "",
+            translatedLines = null, detectedLanguage = null
+        )
+        fetchLyrics(track)
+    }
+
+    /** Delete saved lyrics (hand-picked ones are kept). Returns how many were removed. */
+    suspend fun clearSavedLyrics(): Int = withContext(Dispatchers.IO) { lyricsCache.clearUnpinned() }
 
     companion object {
         private const val CACHE_REFRESH_MS = 7L * 24 * 60 * 60 * 1000

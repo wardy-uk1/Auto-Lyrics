@@ -126,6 +126,23 @@
         android:paddingBottom="2dp">
 
         <Button
+            android:id="@+id/btn_wrong_lyrics"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:text="Wrong lyrics?"
+            android:textSize="11sp"
+            android:textColor="#CCCCDD"
+            android:backgroundTint="#2A2A3E"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:textAllCaps="false"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginEnd="8dp"
+            style="?attr/materialButtonOutlinedStyle" />
+
+        <Button
             android:id="@+id/btn_performance_mode"
             android:layout_width="wrap_content"
             android:layout_height="34dp"
@@ -398,6 +415,21 @@
             android:layout_height="40dp"
             android:layout_marginTop="8dp"
             android:text="Choose music apps…"
+            android:textSize="13sp"
+            android:textColor="#CCCCDD"
+            android:backgroundTint="#2A2A3E"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:textAllCaps="false"
+            style="?attr/materialButtonOutlinedStyle" />
+
+        <!-- Clear saved lyrics -->
+        <Button
+            android:id="@+id/btn_clear_cache"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:text="Clear saved lyrics"
             android:textSize="13sp"
             android:textColor="#CCCCDD"
             android:backgroundTint="#2A2A3E"

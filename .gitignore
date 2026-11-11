@@ -15,3 +15,9 @@ local.properties
 app/debug.keystore
 app/key.pem
 app/cert.pem
+
+# Private signing keys must never be committed
+release.p12
+*-release.p12
+keystore-base64.txt
+SIGNING-SECRETS.txt

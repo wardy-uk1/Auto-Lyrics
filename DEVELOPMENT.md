@@ -16,8 +16,9 @@
 | **LRCLIB** | Second lyrics API: `lrclib.net`. Provides synced and plain lyrics. |
 | **NetEase** | Third lyrics API: `music.163.com`. Provides synced and plain lyrics. Only matched when title + artist agree. |
 | **Big lyrics** (AA) | Swaps the now-playing card text: lyric in the large title slot, "Song — Artist" in the small subtitle slot. Pref `aa_big_lyrics`. |
-| **AA offset** | A separate lyrics delay setting specific to Android Auto, stored as `aa_offset_ms` in SharedPreferences. |
-| **Phone sync** | The global lyrics offset applied on the phone, managed by `MediaTracker.offsetMs`. |
+| **AA offset** | Car audio delay for all songs (`aa_offset_ms`), set on the phone. Added on top of the per-song offset. |
+| **Song offset** | Per-song lyric timing (`MediaTracker.offsetMs`), saved in the `song_offsets` prefs file and reloaded when the song plays again. |
+| **Wrong lyrics? / pinned** | User-picked lyrics from the picker are stored in the cache with `pinned = true`: never auto-refreshed, pruned or cleared. |
 
 ## Architecture
 
@@ -64,7 +65,6 @@ AutoLyricsApp (Application)
 | `media/AppFilter.kt` | Remembers every app seen with a media session and which ones the user has unticked (prefs `seen_packages`, `ignored_packages`). |
 | `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
 | `util/AlbumColorExtractor.kt` | Extracts `AlbumColors` from album art bitmaps using AndroidX Palette. |
-| `util/AudioSyncHelper.kt` | Audio-based auto-sync using `SpeechRecognizer`. Calculates offset from recognized speech. |
 | `auto/LyricsBrowserService.kt` | Android Auto integration. Browse tree, MediaSession metadata/playback, karaoke brackets, transport proxy. |
 | `auto/BootReceiver.kt` | Starts `LyricsBrowserService` on `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`. |
 
@@ -87,7 +87,9 @@ AutoLyricsApp (Application)
 | `app/build.gradle.kts` | Dependencies, SDK versions, signing config, version management. |
 | `AndroidManifest.xml` | Components, permissions, AA metadata. |
 | `.github/workflows/build.yml` | CI: build APK, create GitHub release with versioned filename. |
-| `app/signing.p12` | Shared signing keystore (avoids version conflicts across CI runs). |
+| `app/signing.p12` | Old shared signing key, used for debug builds and as a fallback. |
+| Release signing | Release APKs are signed with the owner's private key from GitHub secrets `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD` (decoded in CI to `SIGNING_STORE_FILE`). Never commit the key. |
+| `app/src/test/` | JUnit tests for `MetadataCleaner` and `LrcParser`; CI runs `testDebugUnitTest` before building. |
 
 ## Key Constants (`LyricsBrowserService`)
 
@@ -109,6 +111,8 @@ AutoLyricsApp (Application)
 |---|---|---|---|
 | `lyrics_font_size` | Int | 16 | Phone lyrics text size (sp). |
 | `lyrics_font_family` | String | `sans-serif` | Phone lyrics font family. |
+| `translation_enabled` | Boolean | false | Translate non-English lyrics to English (ML Kit). |
+| (`song_offsets` prefs file) | Long per `title|artist` | — | Per-song lyric timing, adjusted from the phone delay buttons or the car Sync tab. |
 | `aa_karaoke_enabled` | Boolean | true | Toggle karaoke bracket display on AA. |
 | `aa_offset_ms` | Long | 0 | Android Auto-specific lyrics delay (ms). |
 | `aa_big_lyrics` | Boolean | true | Show the lyric big and the song name small on the AA now-playing card. |

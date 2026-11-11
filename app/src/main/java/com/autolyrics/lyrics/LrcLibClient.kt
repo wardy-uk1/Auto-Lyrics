@@ -17,7 +17,7 @@ object LrcLibClient {
 
     private val gson = Gson()
     private const val BASE_URL = "https://lrclib.net/api"
-    private const val USER_AGENT = "AutoLyrics v1.0 (https://github.com/user/auto-lyrics)"
+    private const val USER_AGENT = "AutoLyrics (https://github.com/wardy-uk1/Auto-Lyrics)"
 
     data class LrcLibResponse(
         @SerializedName("id") val id: Int?,
@@ -103,6 +103,18 @@ object LrcLibClient {
         }
     }
 
+    /** All LRCLIB matches for a title/artist (used by the "Wrong lyrics?" picker). */
+    fun search(trackName: String, artistName: String): List<LrcLibResponse> =
+        searchAll(trackName, artistName)
+
+    /** Free-text LRCLIB search, e.g. "Titanium Madilyn Bailey". */
+    fun searchQuery(query: String): List<LrcLibResponse> {
+        val url = "$BASE_URL/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+        return runSearch(url.toString())
+    }
+
     private fun searchAll(trackName: String, artistName: String): List<LrcLibResponse> {
         val urlBuilder = "$BASE_URL/search".toHttpUrl().newBuilder()
             .addQueryParameter("track_name", trackName)
@@ -110,6 +122,11 @@ object LrcLibClient {
         if (artistName.isNotBlank()) {
             urlBuilder.addQueryParameter("artist_name", artistName)
         }
+        return runSearch(urlBuilder.build().toString())
+    }
+
+    private fun runSearch(url: String): List<LrcLibResponse> {
+        val urlBuilder = url.toHttpUrl().newBuilder()
 
         val request = Request.Builder()
             .url(urlBuilder.build())

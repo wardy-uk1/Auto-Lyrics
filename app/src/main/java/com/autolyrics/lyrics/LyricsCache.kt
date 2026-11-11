@@ -21,7 +21,9 @@ class LyricsCache(context: Context) {
         val lines: List<CachedLine>,
         val status: String,
         val source: String,
-        val timestamp: Long
+        val timestamp: Long,
+        /** True when the user picked these lyrics via "Wrong lyrics?" — never refreshed or pruned. */
+        val pinned: Boolean = false
     )
 
     data class CachedLine(
@@ -61,7 +63,14 @@ class LyricsCache(context: Context) {
         }
     }
 
-    fun put(title: String, artist: String, lines: List<LyricLine>, status: LyricsStatus, source: String) {
+    fun put(
+        title: String,
+        artist: String,
+        lines: List<LyricLine>,
+        status: LyricsStatus,
+        source: String,
+        pinned: Boolean = false
+    ) {
         try {
             val cached = CachedResult(
                 lines = lines.map { line ->
@@ -73,7 +82,8 @@ class LyricsCache(context: Context) {
                 },
                 status = status.name,
                 source = source,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                pinned = pinned
             )
             val file = cacheFile(title, artist)
             file.writeText(gson.toJson(cached))
@@ -92,6 +102,56 @@ class LyricsCache(context: Context) {
         } catch (_: Exception) {
             Long.MAX_VALUE
         }
+    }
+
+    fun isPinned(title: String, artist: String): Boolean {
+        val file = cacheFile(title, artist)
+        if (!file.exists()) return false
+        return try {
+            gson.fromJson(file.readText(), CachedResult::class.java)?.pinned == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun delete(title: String, artist: String) {
+        cacheFile(title, artist).delete()
+    }
+
+    /**
+     * Housekeeping: delete saved lyrics older than [maxAgeMs], then the oldest
+     * ones beyond [maxFiles]. Lyrics the user picked by hand are always kept.
+     */
+    fun prune(maxAgeMs: Long = 60L * 24 * 60 * 60 * 1000, maxFiles: Int = 1500) {
+        try {
+            val now = System.currentTimeMillis()
+            val unpinned = (cacheDir.listFiles() ?: return).filter { f ->
+                try {
+                    gson.fromJson(f.readText(), CachedResult::class.java)?.pinned != true
+                } catch (_: Exception) {
+                    true
+                }
+            }
+            unpinned.filter { now - it.lastModified() > maxAgeMs }.forEach { it.delete() }
+            val remaining = unpinned.filter { it.exists() }.sortedByDescending { it.lastModified() }
+            remaining.drop(maxFiles).forEach { it.delete() }
+        } catch (_: Exception) {
+            // housekeeping failures are non-fatal
+        }
+    }
+
+    /** Delete all saved lyrics except the ones the user picked by hand. Returns how many were removed. */
+    fun clearUnpinned(): Int {
+        var removed = 0
+        (cacheDir.listFiles() ?: return 0).forEach { f ->
+            val pinned = try {
+                gson.fromJson(f.readText(), CachedResult::class.java)?.pinned == true
+            } catch (_: Exception) {
+                false
+            }
+            if (!pinned && f.delete()) removed++
+        }
+        return removed
     }
 
     private fun cacheFile(title: String, artist: String): File {
