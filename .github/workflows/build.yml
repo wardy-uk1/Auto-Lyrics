@@ -78,10 +78,27 @@ jobs:
           name: auto-lyrics-${{ steps.version.outputs.name }}-debug
           path: out/auto-lyrics-${{ steps.version.outputs.name }}-debug.apk
 
+      # Publish a GitHub Release automatically the first time a new version
+      # number is built on main (or when a v* tag is pushed).
+      - name: Check if this version is already released
+        id: released
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.name }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v${{ steps.version.outputs.name }} already exists - skipping." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.released.outputs.exists == 'false' && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
           files: out/auto-lyrics-${{ steps.version.outputs.name }}.apk
           name: Auto Lyrics ${{ steps.version.outputs.name }}
           body_path: .github/RELEASE_NOTES.md

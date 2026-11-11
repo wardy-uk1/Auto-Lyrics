@@ -91,7 +91,7 @@ On the car screen open **Settings → Change layout** and choose **Media closer 
 
 - Android Studio (or Gradle 8.4), JDK 17, Android SDK 34
 - `gradle assembleDebug` builds a debug APK; `gradle testDebugUnitTest` runs the tests
-- Every push to `main` is built and tested by GitHub Actions. Pushing a tag such as `v1.14.0` publishes a Release with the APK
+- Every push to `main` is built and tested by GitHub Actions. The first build of each new `versionName` is published automatically as a Release with the APK
 - Technical notes for developers are in [DEVELOPMENT.md](DEVELOPMENT.md)
 
 ---
