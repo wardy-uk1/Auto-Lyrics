@@ -4,7 +4,7 @@
 
 | Term | Meaning |
 |---|---|
-| **Full lyrics view** (AA) | The scrollable browse-tree list of lyric lines on Android Auto, powered by `onLoadChildren()`. Shows a windowed subset of lines. |
+| **Full lyrics view** (AA) | The browse tree on Android Auto. The root has two browsable tabs: **Lyrics** (header row with art/song/artist, then current line + next 3) and **Sync** (car delay, preview, ±0.1s/±0.5s, Reset). All root items must be browsable or AA adds a "More" tab. |
 | **Fast-updating screen** / **Now-playing card** (AA) | The Android Auto now-playing card. Displays title, artist, album art, and a subtitle (current lyric) via `MediaMetadataCompat`. Updated every 300ms. |
 | **Small fast-updating screen** | The now-playing card when AA is in the *minimized* container (e.g. maps in the larger panel). |
 | **Large fast-updating screen** | The now-playing card when it fills the larger AA container. |
@@ -92,8 +92,9 @@ AutoLyricsApp (Application)
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `WINDOW_SIZE` | 3 | Number of synced lyric lines in the AA browse tree window. |
-| `PLAIN_WINDOW_SIZE` | 4 | Number of unsynced lyric lines in the AA browse tree window. |
+| `WINDOW_SIZE` | 4 | Synced lyric lines on the AA Lyrics tab: the current line (top, ▶) plus the next 3. |
+| `PLAIN_WINDOW_SIZE` | 4 | Unsynced lyric lines on the AA Lyrics tab (estimated current line first). |
+| `SYNC_STEPS` | ±0.1s, ±0.5s | Buttons on the AA Sync tab, plus a Reset-to-0 button. |
 | `PAD_WIDTH` | 60 | Character padding for browse tree items (reduces choppiness). |
 | `NOTIFY_THROTTLE_MS` | 500ms | Minimum interval between browse tree refreshes. |
 | `BROWSE_KARAOKE_WINDOW_MS` | 600ms | Karaoke bracket time window for browse tree items. |

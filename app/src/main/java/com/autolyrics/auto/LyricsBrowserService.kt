@@ -66,12 +66,27 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
     companion object {
         private const val ROOT_ID = "root"
+        private const val LYRICS_ID = "lyrics_tab"
         private const val SYNC_MENU_ID = "sync_menu"
-        private const val SYNC_MINUS_ID = "sync_minus"
-        private const val SYNC_PLUS_ID = "sync_plus"
-        private const val SYNC_STEP_MS = 50L
-        private const val WINDOW_SIZE = 3
+        private const val SYNC_RESET_ID = "sync_reset"
+
+        /** Sync tab buttons: media id -> (label, change in ms). */
+        private val SYNC_STEPS = linkedMapOf(
+            "sync_minus_500" to Pair("⏪  − 0.5s", -500L),
+            "sync_minus_100" to Pair("⏪  − 0.1s", -100L),
+            "sync_plus_100" to Pair("⏩  + 0.1s", 100L),
+            "sync_plus_500" to Pair("⏩  + 0.5s", 500L)
+        )
+
+        /** Lyrics tab: the current line plus the next 3. */
+        private const val WINDOW_SIZE = 4
         private const val PLAIN_WINDOW_SIZE = 4
+
+        // Android Auto content-style hints: show everything as plain lists
+        private const val CONTENT_STYLE_SUPPORTED = "android.media.browse.CONTENT_STYLE_SUPPORTED"
+        private const val CONTENT_STYLE_BROWSABLE_HINT = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT"
+        private const val CONTENT_STYLE_PLAYABLE_HINT = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT"
+        private const val CONTENT_STYLE_LIST = 1
         private const val PAD_WIDTH = 60
         private const val NOTIFY_THROTTLE_MS = 500L
         private const val BROWSE_KARAOKE_WINDOW_MS = 600L
@@ -146,7 +161,12 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         clientUid: Int,
         rootHints: Bundle?
     ): BrowserRoot {
-        return BrowserRoot(ROOT_ID, null)
+        val extras = Bundle().apply {
+            putBoolean(CONTENT_STYLE_SUPPORTED, true)
+            putInt(CONTENT_STYLE_BROWSABLE_HINT, CONTENT_STYLE_LIST)
+            putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_LIST)
+        }
+        return BrowserRoot(ROOT_ID, extras)
     }
 
     override fun onLoadChildren(
@@ -156,13 +176,22 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         val state = mediaTracker.state.value
         val items = mutableListOf<MediaBrowserCompat.MediaItem>()
 
+        // Root: two tabs, "Lyrics" then "Sync". (All root items must be browsable,
+        // otherwise Android Auto lumps playable items into an extra "More" tab.)
+        if (parentId == ROOT_ID) {
+            items.add(buildBrowsableItem(LYRICS_ID, "Lyrics", null))
+            items.add(buildBrowsableItem(SYNC_MENU_ID, "Sync", null))
+            result.sendResult(items)
+            return
+        }
+
         if (parentId == SYNC_MENU_ID) {
             buildSyncMenu(state, items)
             result.sendResult(items)
             return
         }
 
-        if (parentId == SYNC_MINUS_ID || parentId == SYNC_PLUS_ID) {
+        if (parentId != LYRICS_ID) {
             result.sendResult(items)
             return
         }
@@ -186,7 +215,6 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             LyricsStatus.FOUND -> {
                 addTrackHeader(state, items)
                 buildWindowedLyrics(state, items)
-                items.add(buildBrowsableItem(SYNC_MENU_ID, "⟳ Sync", "Adjust offset"))
             }
             LyricsStatus.PLAIN_ONLY -> {
                 addTrackHeader(state, items)
@@ -203,18 +231,14 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
                             .coerceIn(0, state.lines.size - 1)
                     } else { 0 }
 
-                    val half = PLAIN_WINDOW_SIZE / 2
-                    val winStart = maxOf(0, estimatedIdx - half)
-                    val winEnd = minOf(state.lines.size, winStart + PLAIN_WINDOW_SIZE)
-                    val adjStart = maxOf(0, winEnd - PLAIN_WINDOW_SIZE)
-
-                    for (i in adjStart until winEnd) {
+                    val winEnd = minOf(state.lines.size, estimatedIdx + PLAIN_WINDOW_SIZE)
+                    for (i in estimatedIdx until winEnd) {
                         val text = state.lines[i].text.ifBlank { "♪" }
+                        val prefix = if (i == estimatedIdx) "▶  " else "    "
                         val trans = state.translatedLines?.getOrNull(i)?.takeIf { it.isNotBlank() }
-                        items.add(buildTextItem("line_$i", "    $text", pad = true, subtitle = trans))
+                        items.add(buildTextItem("line_$i", "$prefix$text", pad = true, subtitle = trans))
                     }
                 }
-                items.add(buildBrowsableItem(SYNC_MENU_ID, "⟳ Sync", "Adjust offset"))
             }
         }
 
@@ -225,8 +249,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         state: LyricsState,
         items: MutableList<MediaBrowserCompat.MediaItem>
     ) {
-        val sign = if (aaOffsetMs >= 0) "+" else ""
-        items.add(buildTextItem("sync_offset", "AA Offset: ${sign}${aaOffsetMs}ms"))
+        items.add(buildTextItem("sync_offset", "Car delay: ${formatOffset(aaOffsetMs)}"))
 
         if (state.lines.isNotEmpty()) {
             val posMs = getAaPositionMs()
@@ -252,8 +275,15 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             items.add(buildTextItem("sync_next", "    ${state.lines.getOrNull(idx + 1)?.text ?: ""}", pad = true, subtitle = nextTrans))
         }
 
-        items.add(buildTextItem(SYNC_MINUS_ID, "⏪  − 50ms"))
-        items.add(buildTextItem(SYNC_PLUS_ID, "⏩  + 50ms"))
+        for ((id, step) in SYNC_STEPS) {
+            items.add(buildTextItem(id, step.first))
+        }
+        items.add(buildTextItem(SYNC_RESET_ID, "↺  Reset to 0"))
+    }
+
+    private fun formatOffset(ms: Long): String {
+        val sign = if (ms > 0) "+" else if (ms < 0) "−" else ""
+        return "$sign%.2fs".format(kotlin.math.abs(ms) / 1000.0)
     }
 
     private fun addTrackHeader(
@@ -262,28 +292,10 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
     ) {
         val track = state.track ?: return
 
-        val subtitle = buildString {
-            append(track.artist)
-            val posMs = try {
-                mediaTracker.getCurrentPositionMs().coerceAtLeast(0)
-            } catch (_: Exception) { -1L }
-            if (posMs >= 0 && track.durationMs > 0) {
-                append("  ·  ")
-                append(formatTime(posMs))
-                append(" / ")
-                append(formatTime(track.durationMs))
-            }
-            val typeLabel = lyricsTypeLabel(state)
-            if (typeLabel.isNotBlank()) {
-                append("  ·  ")
-                append(typeLabel)
-            }
-        }
-
         val descBuilder = MediaDescriptionCompat.Builder()
             .setMediaId("header")
             .setTitle(track.title)
-            .setSubtitle(subtitle)
+            .setSubtitle(track.artist)
 
         val headerArt = state.albumArt ?: lastAlbumArt
         headerArt?.let { art ->
@@ -298,13 +310,6 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         )
     }
 
-    private fun formatTime(ms: Long): String {
-        val totalSec = ms / 1000
-        val min = totalSec / 60
-        val sec = totalSec % 60
-        return "%d:%02d".format(min, sec)
-    }
-
     private fun buildWindowedLyrics(
         state: LyricsState,
         items: MutableList<MediaBrowserCompat.MediaItem>
@@ -317,13 +322,11 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
         val posMs = getAaPositionMs()
         val aaCurrentIdx = findLineIndex(lines, posMs).coerceAtLeast(0)
-        val half = WINDOW_SIZE / 2
 
-        val windowStart = maxOf(0, aaCurrentIdx - half)
-        val windowEnd = minOf(lines.size, windowStart + WINDOW_SIZE)
-        val adjustedStart = maxOf(0, windowEnd - WINDOW_SIZE)
+        // Current line at the top, then the lines coming up next
+        val windowEnd = minOf(lines.size, aaCurrentIdx + WINDOW_SIZE)
 
-        for (i in adjustedStart until windowEnd) {
+        for (i in aaCurrentIdx until windowEnd) {
             val line = lines[i]
             val isCurrent = i == aaCurrentIdx
             val prefix = if (isCurrent) "▶  " else "    "
@@ -351,28 +354,12 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         )
     }
 
-    private fun buildBrowsableItem(id: String, title: String, subtitle: String): MediaBrowserCompat.MediaItem {
-        return MediaBrowserCompat.MediaItem(
-            MediaDescriptionCompat.Builder()
-                .setMediaId(id)
-                .setTitle(title)
-                .setSubtitle(subtitle)
-                .build(),
-            MediaBrowserCompat.MediaItem.FLAG_BROWSABLE
-        )
-    }
-
-    private fun lyricsTypeLabel(state: LyricsState): String {
-        val lang = state.detectedLanguage?.uppercase()
-        val suffix = if (lang != null) " · $lang" else ""
-        return when (state.status) {
-            LyricsStatus.FOUND -> {
-                val hasKaraoke = state.lines.any { it.words.isNotEmpty() }
-                if (hasKaraoke && aaKaraokeEnabled) "⟳ Karaoke$suffix" else "⟳ Synced$suffix"
-            }
-            LyricsStatus.PLAIN_ONLY -> "⟳ Not synced$suffix"
-            else -> "⟳ Sync"
-        }
+    private fun buildBrowsableItem(id: String, title: String, subtitle: String?): MediaBrowserCompat.MediaItem {
+        val builder = MediaDescriptionCompat.Builder()
+            .setMediaId(id)
+            .setTitle(title)
+        if (!subtitle.isNullOrBlank()) builder.setSubtitle(subtitle)
+        return MediaBrowserCompat.MediaItem(builder.build(), MediaBrowserCompat.MediaItem.FLAG_BROWSABLE)
     }
 
     // --- Karaoke helpers ---
@@ -611,11 +598,8 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         }
 
         val winSize = if (isPlain) PLAIN_WINDOW_SIZE else WINDOW_SIZE
-        val half = winSize / 2
-        val windowStart = maxOf(0, currentIdx - half)
-        val windowEnd = minOf(lines.size, windowStart + winSize)
-        val adjustedStart = maxOf(0, windowEnd - winSize)
-        return WindowInfo(adjustedStart, windowEnd, currentIdx)
+        val windowEnd = minOf(lines.size, currentIdx + winSize)
+        return WindowInfo(currentIdx, windowEnd, currentIdx)
     }
 
     private fun forceRefresh() {
@@ -624,7 +608,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         displayedCurrentIdx = -1
         lastNotifyTime = 0L
         resetKaraokeState()
-        notifyChildrenChanged(ROOT_ID)
+        notifyChildrenChanged(LYRICS_ID)
         notifyChildrenChanged(SYNC_MENU_ID)
     }
 
@@ -642,7 +626,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             handler.removeCallbacksAndMessages(null)
             pendingNotify = false
             resetKaraokeState()
-            notifyChildrenChanged(ROOT_ID)
+            notifyChildrenChanged(LYRICS_ID)
             notifyChildrenChanged(SYNC_MENU_ID)
             return
         }
@@ -665,14 +649,14 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
         if (elapsed >= NOTIFY_THROTTLE_MS) {
             lastNotifyTime = now
-            notifyChildrenChanged(ROOT_ID)
+            notifyChildrenChanged(LYRICS_ID)
             notifyChildrenChanged(SYNC_MENU_ID)
         } else if (!pendingNotify) {
             pendingNotify = true
             handler.postDelayed({
                 pendingNotify = false
                 lastNotifyTime = System.currentTimeMillis()
-                notifyChildrenChanged(ROOT_ID)
+                notifyChildrenChanged(LYRICS_ID)
                 notifyChildrenChanged(SYNC_MENU_ID)
             }, NOTIFY_THROTTLE_MS - elapsed)
         }
@@ -724,12 +708,12 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
             if (mediaId == null) return
 
-            if (mediaId == SYNC_MINUS_ID || mediaId == SYNC_PLUS_ID) {
-                if (mediaId == SYNC_MINUS_ID) aaOffsetMs -= SYNC_STEP_MS
-                else aaOffsetMs += SYNC_STEP_MS
+            val step = SYNC_STEPS[mediaId]
+            if (step != null || mediaId == SYNC_RESET_ID) {
+                aaOffsetMs = if (step != null) aaOffsetMs + step.second else 0L
                 getSharedPreferences("auto_lyrics_prefs", MODE_PRIVATE)
                     .edit().putLong("aa_offset_ms", aaOffsetMs).apply()
-                notifyChildrenChanged(ROOT_ID)
+                notifyChildrenChanged(LYRICS_ID)
                 notifyChildrenChanged(SYNC_MENU_ID)
                 return
             }
