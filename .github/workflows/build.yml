@@ -83,4 +83,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: out/auto-lyrics-${{ steps.version.outputs.name }}.apk
-          generate_release_notes: true
+          name: Auto Lyrics ${{ steps.version.outputs.name }}
+          body_path: .github/RELEASE_NOTES.md
+          make_latest: true
