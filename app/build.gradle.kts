@@ -11,7 +11,7 @@ android {
         applicationId = "com.autolyrics"
         minSdk = 26
         targetSdk = 34
-        versionCode = 38
+        versionCode = 39
         versionName = "2.0.0"
     }
 

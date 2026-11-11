@@ -25,6 +25,7 @@
 - Full-screen **Performance mode**
 - **Wrong lyrics?** — pick the right lyrics from other search results; your choice is kept for that song
 - **Choose music apps** — untick apps you don't want followed (e.g. WhatsApp voice notes, podcasts)
+- **Back up & restore** your settings, song timings and picked lyrics
 - Optional translation of non-English lyrics into English (off by default)
 
 **Lyrics sources:** [SyncLRC](https://synclrc.tharuk.pro), [LRCLIB](https://lrclib.net) and NetEase Cloud Music. Synced lyrics are always preferred over plain text, and messy titles from YouTube-based apps (several artists, "(Official Video)", "Artist - Song") are cleaned up automatically.
@@ -38,7 +39,7 @@ Go to the **[Releases page](../../releases/latest)** and download the `.apk` fil
 
 > **Already have the original Auto Lyrics installed?** Uninstall it first. Both apps use the same internal ID, so Android will refuse to install this one over it.
 >
-> **Upgrading from Auto Lyrics 1.x to 2.0?** Uninstall 1.x first (one time only) — version 2 is signed with a new key. Then grant notification access again and re-set your car delay.
+> **Upgrading from Auto Lyrics 1.x to 2.0?** Version 2 is signed with a new key, so it needs a one-time reinstall: in 1.15, tap **Back up settings…**, uninstall, install 2.0, grant notification access, then tap **Restore settings…**.
 
 ### 2. Install it
 Open the downloaded file. If Android asks, allow your browser or file manager to **install unknown apps**, then tap **Install**.
@@ -74,6 +75,7 @@ On the car screen open **Settings → Change layout** and choose **Media closer 
 - **Your car's audio lags behind your phone?** Just nudge songs on the car's **Sync** tab as you go — after a few songs that need the same nudge, Auto Lyrics learns your car's delay and applies it to every song (switch: *Learn car delay automatically*). You can also set **Car delay** by hand in the phone app's settings.
 - **Wrong lyrics or none at all?** Tap **Wrong lyrics?** on the phone and choose from the list. **Use automatic** undoes your choice.
 - **Lyrics follow the wrong app?** Tap **Choose music apps…** in settings and untick it.
+- **Reinstalling or changing phones?** Use **Back up settings…** first, then **Restore settings…** afterwards. It keeps your settings, per-song timings and hand-picked lyrics.
 - **Old icon still showing?** Restart your phone or reconnect to the car.
 
 ---
