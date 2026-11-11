@@ -13,6 +13,9 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.media.MediaBrowserServiceCompat
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
+import com.autolyrics.R
 import com.autolyrics.media.MediaTracker
 import com.autolyrics.model.LyricLine
 import com.autolyrics.model.LyricsState
@@ -21,6 +24,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 
 class LyricsBrowserService : MediaBrowserServiceCompat() {
+
+    private data class SyncStep(val label: String, val deltaMs: Long, val icon: Int)
 
     private lateinit var mediaSession: MediaSessionCompat
     private lateinit var mediaTracker: MediaTracker
@@ -70,13 +75,14 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         private const val SYNC_MENU_ID = "sync_menu"
         private const val SYNC_RESET_ID = "sync_reset"
 
-        /** Sync tab buttons: media id -> (label, change in ms). */
+        /** Sync tab buttons: media id -> step (label, change in ms, white icon). */
         private val SYNC_STEPS = linkedMapOf(
-            "sync_minus_500" to Pair("⏪  − 0.5s", -500L),
-            "sync_minus_100" to Pair("⏪  − 0.1s", -100L),
-            "sync_plus_100" to Pair("⏩  + 0.1s", 100L),
-            "sync_plus_500" to Pair("⏩  + 0.5s", 500L)
+            "sync_minus_500" to SyncStep("− 0.5s", -500L, R.drawable.ic_aa_back_big),
+            "sync_minus_100" to SyncStep("− 0.1s", -100L, R.drawable.ic_aa_back_small),
+            "sync_plus_100" to SyncStep("+ 0.1s", 100L, R.drawable.ic_aa_fwd_small),
+            "sync_plus_500" to SyncStep("+ 0.5s", 500L, R.drawable.ic_aa_fwd_big)
         )
+        private const val ICON_PX = 96
 
         /** Lyrics tab: the current line plus the next 3. */
         private const val WINDOW_SIZE = 4
@@ -276,9 +282,20 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         }
 
         for ((id, step) in SYNC_STEPS) {
-            items.add(buildTextItem(id, step.first))
+            items.add(buildTextItem(id, step.label, icon = iconBitmap(step.icon)))
         }
-        items.add(buildTextItem(SYNC_RESET_ID, "↺  Reset to 0"))
+        items.add(buildTextItem(SYNC_RESET_ID, "Reset to 0", icon = iconBitmap(R.drawable.ic_aa_reset)))
+    }
+
+    private val iconCache = mutableMapOf<Int, Bitmap?>()
+
+    /** White vector icon rendered to a small bitmap (Android Auto list rows take bitmaps). */
+    private fun iconBitmap(resId: Int): Bitmap? = iconCache.getOrPut(resId) {
+        try {
+            ContextCompat.getDrawable(this, resId)?.toBitmap(ICON_PX, ICON_PX)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun formatOffset(ms: Long): String {
@@ -342,12 +359,19 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         }
     }
 
-    private fun buildTextItem(id: String, text: String, pad: Boolean = false, subtitle: String? = null): MediaBrowserCompat.MediaItem {
+    private fun buildTextItem(
+        id: String,
+        text: String,
+        pad: Boolean = false,
+        subtitle: String? = null,
+        icon: Bitmap? = null
+    ): MediaBrowserCompat.MediaItem {
         val title = if (pad) text.padEnd(PAD_WIDTH) else text
         val builder = MediaDescriptionCompat.Builder()
             .setMediaId(id)
             .setTitle(title)
         if (!subtitle.isNullOrBlank()) builder.setSubtitle(subtitle)
+        if (icon != null) builder.setIconBitmap(icon)
         return MediaBrowserCompat.MediaItem(
             builder.build(),
             MediaBrowserCompat.MediaItem.FLAG_PLAYABLE
@@ -710,7 +734,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
             val step = SYNC_STEPS[mediaId]
             if (step != null || mediaId == SYNC_RESET_ID) {
-                aaOffsetMs = if (step != null) aaOffsetMs + step.second else 0L
+                aaOffsetMs = if (step != null) aaOffsetMs + step.deltaMs else 0L
                 getSharedPreferences("auto_lyrics_prefs", MODE_PRIVATE)
                     .edit().putLong("aa_offset_ms", aaOffsetMs).apply()
                 notifyChildrenChanged(LYRICS_ID)

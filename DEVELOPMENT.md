@@ -55,7 +55,7 @@ AutoLyricsApp (Application)
 | `PerformanceActivity.kt` | Full-screen immersive karaoke mode with large text and word pop-out effect. |
 | `model/Models.kt` | Data classes: `TrackInfo`, `LyricWord`, `LyricLine`, `AlbumColors`, `LyricsStatus`, `LyricsState`. |
 | `media/MediaTracker.kt` | Singleton. Tracks active media session, fetches lyrics, manages offset, emits `StateFlow<LyricsState>`. |
-| `media/MediaListenerService.kt` | `NotificationListenerService` — detects media sessions. |
+| `media/MediaListenerService.kt` | `NotificationListenerService` — detects media sessions. Prefers the playing player, stays with the current one while it buffers/skips, and re-checks every 3s (watchdog) so lyrics don't freeze on a stale session. |
 | `lyrics/SyncLrcClient.kt` | HTTP client for SyncLRC API (primary source). |
 | `lyrics/LrcLibClient.kt` | HTTP client for LRCLIB API (second source). |
 | `lyrics/NetEaseClient.kt` | HTTP client for NetEase Cloud Music (third source). Search + strict title/artist/duration match, then LRC fetch. |
@@ -94,7 +94,7 @@ AutoLyricsApp (Application)
 |---|---|---|
 | `WINDOW_SIZE` | 4 | Synced lyric lines on the AA Lyrics tab: the current line (top, ▶) plus the next 3. |
 | `PLAIN_WINDOW_SIZE` | 4 | Unsynced lyric lines on the AA Lyrics tab (estimated current line first). |
-| `SYNC_STEPS` | ±0.1s, ±0.5s | Buttons on the AA Sync tab, plus a Reset-to-0 button. |
+| `SYNC_STEPS` | ±0.1s, ±0.5s | Buttons on the AA Sync tab (white vector icons `ic_aa_*`, rendered to bitmaps), plus a Reset-to-0 button. |
 | `PAD_WIDTH` | 60 | Character padding for browse tree items (reduces choppiness). |
 | `NOTIFY_THROTTLE_MS` | 500ms | Minimum interval between browse tree refreshes. |
 | `BROWSE_KARAOKE_WINDOW_MS` | 600ms | Karaoke bracket time window for browse tree items. |

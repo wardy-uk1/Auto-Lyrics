@@ -4,12 +4,27 @@ import android.content.ComponentName
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 class MediaListenerService : NotificationListenerService() {
 
     private lateinit var sessionManager: MediaSessionManager
+    private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Watchdog: re-check the active players every few seconds. Media session
+     * change events can be missed or arrive mid track-change, which used to leave
+     * the app following a paused/stale player so the lyrics froze.
+     */
+    private val watchdog = object : Runnable {
+        override fun run() {
+            updateSessions()
+            handler.postDelayed(this, WATCHDOG_MS)
+        }
+    }
 
     private val sessionsListener =
         MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
@@ -30,10 +45,13 @@ class MediaListenerService : NotificationListenerService() {
             )
             updateSessions()
         } catch (_: SecurityException) { }
+        handler.removeCallbacks(watchdog)
+        handler.postDelayed(watchdog, WATCHDOG_MS)
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        handler.removeCallbacks(watchdog)
         try {
             sessionManager.removeOnActiveSessionsChangedListener(sessionsListener)
         } catch (_: Exception) { }
@@ -55,17 +73,44 @@ class MediaListenerService : NotificationListenerService() {
     }
 
     private fun pickBestSession(controllers: List<MediaController>?) {
+        val tracker = MediaTracker.getInstance(this)
         val filtered = controllers?.filter { it.packageName != packageName }
         if (filtered.isNullOrEmpty()) {
-            MediaTracker.getInstance(this).onMediaSessionChanged(null)
+            tracker.onMediaSessionChanged(null)
             return
         }
 
-        val playing = filtered.firstOrNull { controller ->
-            controller.playbackState?.state == PlaybackState.STATE_PLAYING
-        }
+        val currentToken = tracker.activeSessionToken()
+        val current = filtered.firstOrNull { it.sessionToken == currentToken }
 
-        val best = playing ?: filtered.first()
-        MediaTracker.getInstance(this).onMediaSessionChanged(best)
+        val best =
+            // 1. Something is actually playing
+            filtered.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            // 2. Our current player is busy changing track / buffering: stay with it
+                ?: current?.takeIf { isBusy(it) }
+            // 3. Any other player that is busy changing track / buffering
+                ?: filtered.firstOrNull { isBusy(it) }
+            // 4. Nothing playing: keep the current player, else the first one
+                ?: current
+                ?: filtered.first()
+
+        tracker.onMediaSessionChanged(best)
+    }
+
+    private fun isBusy(controller: MediaController): Boolean {
+        return when (controller.playbackState?.state) {
+            PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING,
+            PlaybackState.STATE_SKIPPING_TO_NEXT,
+            PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+            PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM,
+            PlaybackState.STATE_FAST_FORWARDING,
+            PlaybackState.STATE_REWINDING -> true
+            else -> false
+        }
+    }
+
+    companion object {
+        private const val WATCHDOG_MS = 3000L
     }
 }

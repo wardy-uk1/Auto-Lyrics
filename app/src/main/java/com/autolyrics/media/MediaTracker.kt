@@ -173,7 +173,20 @@ class MediaTracker private constructor(context: Context) {
         }
     }
 
+    /** Session token of the player we are currently following (null if none). */
+    fun activeSessionToken() = activeController?.sessionToken
+
     fun onMediaSessionChanged(controller: MediaController?) {
+        // Same player as before: just re-read its state (keeps position in sync)
+        // instead of tearing down and re-registering callbacks.
+        if (controller != null && activeController != null &&
+            controller.sessionToken == activeController?.sessionToken
+        ) {
+            handleMetadataChanged(controller.metadata)
+            handlePlaybackStateChanged(controller.playbackState)
+            return
+        }
+
         activeController?.unregisterCallback(mediaCallback)
         activeController = controller
 

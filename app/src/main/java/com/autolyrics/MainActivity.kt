@@ -5,7 +5,10 @@ import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.provider.Settings
 import android.text.SpannableStringBuilder
@@ -243,6 +246,7 @@ class MainActivity : AppCompatActivity() {
                     updateDelayDisplay(state.offsetMs)
                     updateAlbumArt(state)
                     applyThemeColors(state.albumColors)
+                    updateFadedBackground(state)
 
                     if (state.track != null) {
                         val artistText = if (state.track.artist.isNotBlank())
@@ -334,6 +338,73 @@ class MainActivity : AppCompatActivity() {
         } else {
             ivAlbumArt.setImageDrawable(null)
             ivAlbumArt.visibility = View.GONE
+        }
+    }
+
+    private var bgArtSource: Bitmap? = null
+    private var bgColorsSource: AlbumColors? = null
+    private var bgBlurred: Bitmap? = null
+
+    /**
+     * Full-screen background: the album art, blurred and faded behind a
+     * see-through wash of the album's own colours. Falls back to the plain
+     * colour gradient when there is no art.
+     */
+    private fun updateFadedBackground(state: LyricsState) {
+        val art = state.albumArt
+        val colors = state.albumColors
+        if (art === bgArtSource && colors == bgColorsSource) return
+        bgColorsSource = colors
+
+        if (art == null) {
+            bgArtSource = null
+            bgBlurred = null
+            currentColors = null            // let applyThemeColors repaint next time
+            applyThemeColors(colors)
+            return
+        }
+
+        if (art !== bgArtSource) {
+            bgArtSource = art
+            bgBlurred = blurForBackground(art)
+        }
+        val blurred = bgBlurred ?: return
+
+        val top = colors?.dominant ?: Color.BLACK
+        val bottom = colors?.dominantDark ?: Color.BLACK
+        val wash = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(setAlpha(top, 0.55f), setAlpha(bottom, 0.85f))
+        )
+        val artLayer = BitmapDrawable(resources, blurred).apply { isFilterBitmap = true }
+        rootLayout.background = LayerDrawable(arrayOf(artLayer, wash))
+
+        // Let the art show faintly through the top and bottom bars too
+        appBar.setBackgroundColor(setAlpha(lighten(top, 1.3f), 0.6f))
+        delayBar.setBackgroundColor(setAlpha(lighten(bottom, 1.2f), 0.6f))
+    }
+
+    /** Crop to the screen's shape, shrink right down, then scale back up = soft blur. */
+    private fun blurForBackground(src: Bitmap): Bitmap? {
+        return try {
+            val dm = resources.displayMetrics
+            val screenRatio = dm.heightPixels.toFloat() / dm.widthPixels.coerceAtLeast(1)
+            var cropW = src.width
+            var cropH = (cropW * screenRatio).toInt()
+            if (cropH > src.height) {
+                cropH = src.height
+                cropW = (cropH / screenRatio).toInt().coerceAtLeast(1)
+            }
+            val x = (src.width - cropW) / 2
+            val y = (src.height - cropH) / 2
+            val cropped = Bitmap.createBitmap(src, x, y, cropW, cropH)
+            val tinyW = 18
+            val tinyH = (tinyW * screenRatio).toInt().coerceAtLeast(1)
+            val tiny = Bitmap.createScaledBitmap(cropped, tinyW, tinyH, true)
+            val soft = Bitmap.createScaledBitmap(tiny, tinyW * 6, tinyH * 6, true)
+            Bitmap.createScaledBitmap(soft, tinyW * 18, tinyH * 18, true)
+        } catch (_: Exception) {
+            null
         }
     }
 
