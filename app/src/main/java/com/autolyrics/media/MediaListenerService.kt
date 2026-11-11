@@ -74,8 +74,11 @@ class MediaListenerService : NotificationListenerService() {
 
     private fun pickBestSession(controllers: List<MediaController>?) {
         val tracker = MediaTracker.getInstance(this)
-        val filtered = controllers?.filter { it.packageName != packageName }
-        if (filtered.isNullOrEmpty()) {
+        val others = controllers?.filter { it.packageName != packageName }.orEmpty()
+        AppFilter.recordSeen(this, others.map { it.packageName })
+        val ignored = AppFilter.ignored(this)
+        val filtered = others.filter { it.packageName !in ignored }
+        if (filtered.isEmpty()) {
             tracker.onMediaSessionChanged(null)
             return
         }

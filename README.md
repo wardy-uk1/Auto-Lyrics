@@ -5,7 +5,8 @@ An Android Auto app that displays synced lyrics for the currently playing song, 
 ## Features
 
 - **Synced lyrics on Android Auto** — shows the current lyric line with surrounding context, updated in real-time
-- **Works with any music player** — Spotify, YouTube Music, Apple Music, Poweramp, etc.
+- **Works with any music player** — Spotify, YouTube Music, Metrolist, Apple Music, Poweramp, etc. Messy titles from YouTube-based apps (several artists, "(Official Video)", "Artist - Song") are cleaned up automatically
+- **Choose which apps to follow** — untick apps such as WhatsApp or podcast players in the phone settings
 - **Phone companion view** — see lyrics on your phone screen too
 - **Automatic song detection** — picks up whatever is playing via media session APIs
 - **Three lyrics sources** — SyncLRC, LRCLIB and NetEase Cloud Music; synced lyrics from any source are preferred over plain text

@@ -29,10 +29,12 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.widget.SwitchCompat
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.autolyrics.media.AppFilter
 import com.autolyrics.media.MediaListenerService
 import com.autolyrics.media.MediaTracker
 import com.autolyrics.model.AlbumColors
@@ -189,6 +191,8 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putBoolean("aa_karaoke_enabled", isChecked).apply()
         }
 
+        findViewById<Button>(R.id.btn_music_apps).setOnClickListener { showMusicAppsDialog() }
+
         val switchAaBigLyrics = findViewById<SwitchCompat>(R.id.switch_aa_big_lyrics)
         switchAaBigLyrics.isChecked = prefs.getBoolean("aa_big_lyrics", true)
         switchAaBigLyrics.setOnCheckedChangeListener { _, isChecked ->
@@ -339,6 +343,46 @@ class MainActivity : AppCompatActivity() {
             ivAlbumArt.setImageDrawable(null)
             ivAlbumArt.visibility = View.GONE
         }
+    }
+
+    /** Tick-list of every app that has played audio; unticked apps are ignored. */
+    private fun showMusicAppsDialog() {
+        val seen = AppFilter.seen(this)
+        if (seen.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("Music apps")
+                .setMessage("No music apps found yet. Play something in each app you use " +
+                    "(e.g. Spotify, Metrolist), then come back here.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+
+        val pm = packageManager
+        val apps = seen.map { pkg ->
+            val label = try {
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            } catch (_: Exception) {
+                pkg
+            }
+            pkg to label
+        }.sortedBy { it.second.lowercase() }
+
+        val ignored = AppFilter.ignored(this).toMutableSet()
+        val labels = apps.map { it.second }.toTypedArray()
+        val checked = apps.map { it.first !in ignored }.toBooleanArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("Follow these apps")
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPositiveButton("Save") { _, _ ->
+                val newIgnored = apps.filterIndexed { i, _ -> !checked[i] }.map { it.first }.toSet()
+                AppFilter.setIgnored(this, newIgnored)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private var bgArtSource: Bitmap? = null

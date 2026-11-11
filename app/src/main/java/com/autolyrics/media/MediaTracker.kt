@@ -173,6 +173,9 @@ class MediaTracker private constructor(context: Context) {
         }
     }
 
+    /** The player we are currently following (used for play/pause from the car). */
+    fun activeController(): MediaController? = activeController
+
     /** Session token of the player we are currently following (null if none). */
     fun activeSessionToken() = activeController?.sessionToken
 
@@ -391,6 +394,18 @@ class MediaTracker private constructor(context: Context) {
      * is only asked if the earlier ones had no synced lyrics.
      */
     private fun fetchFromAllSources(track: TrackInfo): FetchResult? {
+        // Try the song as reported, then cleaner versions of the title/artist
+        // (first artist only, brackets removed, "Artist - Song" split).
+        var fallback: FetchResult? = null
+        for ((title, artist) in MetadataCleaner.searchVariants(track.title, track.artist)) {
+            val result = fetchFromSourcesOnce(track.copy(title = title, artist = artist))
+            if (result?.status == LyricsStatus.FOUND) return result
+            if (fallback == null) fallback = result
+        }
+        return fallback
+    }
+
+    private fun fetchFromSourcesOnce(track: TrackInfo): FetchResult? {
         val syncLrc = fetchFromSyncLrc(track)
         if (syncLrc?.status == LyricsStatus.FOUND) return syncLrc
 

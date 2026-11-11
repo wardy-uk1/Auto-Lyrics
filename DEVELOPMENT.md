@@ -60,7 +60,8 @@ AutoLyricsApp (Application)
 | `lyrics/LrcLibClient.kt` | HTTP client for LRCLIB API (second source). |
 | `lyrics/NetEaseClient.kt` | HTTP client for NetEase Cloud Music (third source). Search + strict title/artist/duration match, then LRC fetch. |
 | `lyrics/LrcParser.kt` | Parses LRC and ELRC format strings into `LyricLine` lists. |
-| `lyrics/MetadataCleaner.kt` | Normalizes track/artist strings for API queries. |
+| `lyrics/MetadataCleaner.kt` | Normalizes track/artist strings for API queries. `searchVariants()` builds fallback queries: first artist only, brackets/feat./"- Remastered" removed, and "Artist - Song" titles split (for Metrolist / YouTube-based players). |
+| `media/AppFilter.kt` | Remembers every app seen with a media session and which ones the user has unticked (prefs `seen_packages`, `ignored_packages`). |
 | `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
 | `util/AlbumColorExtractor.kt` | Extracts `AlbumColors` from album art bitmaps using AndroidX Palette. |
 | `util/AudioSyncHelper.kt` | Audio-based auto-sync using `SpeechRecognizer`. Calculates offset from recognized speech. |
@@ -125,5 +126,6 @@ The bracket display uses **monotonic advancement** to avoid visual jitter:
 1. **SyncLRC** (`synclrc.tharuk.pro`) — returns karaoke (ELRC), synced (LRC), or plain text.
 2. **LRCLIB** (`lrclib.net`) — returns synced (LRC) or plain text.
 3. **NetEase** (`music.163.com`) — returns synced (LRC) or plain text.
-4. Synced from any source beats plain from any source: a later source is only asked when earlier ones had no synced lyrics (`MediaTracker.fetchFromAllSources`).
+4. Each query variant from `MetadataCleaner.searchVariants()` is tried in turn until synced lyrics are found.
+5. Synced from any source beats plain from any source: a later source is only asked when earlier ones had no synced lyrics (`MediaTracker.fetchFromAllSources`).
 5. Within a SyncLRC response, preference: karaoke > synced > plain.

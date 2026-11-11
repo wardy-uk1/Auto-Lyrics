@@ -689,6 +689,8 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
     // --- Transport controls ---
 
     private fun getActiveMediaController(): MediaController? {
+        // Control the same player the lyrics are following
+        mediaTracker.activeController()?.let { return it }
         val sessionManager = getSystemService(MEDIA_SESSION_SERVICE)
             as? android.media.session.MediaSessionManager ?: return null
         return try {
