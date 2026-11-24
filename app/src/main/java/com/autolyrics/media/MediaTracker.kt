@@ -6,6 +6,9 @@ import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -58,8 +61,55 @@ class MediaTracker private constructor(context: Context) {
         return "${track.title.lowercase().trim()}|${track.artist.lowercase().trim()}"
     }
 
+    // ---- Offline mode ----
+    // Saved lyrics are kept forever (no automatic pruning) so every song played works offline.
+
+    private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+
+    /** True if the phone currently has a working internet connection. */
+    fun isOnline(): Boolean {
+        return try {
+            val caps = connectivity?.getNetworkCapabilities(connectivity.activeNetwork) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } catch (_: Exception) {
+            true   // if we can't tell, behave as before and just try
+        }
+    }
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            handler.post { onConnectivityChanged() }
+        }
+
+        override fun onLost(network: Network) {
+            handler.post { onConnectivityChanged() }
+        }
+    }
+
+    private fun onConnectivityChanged() {
+        val online = isOnline()
+        val state = _state.value
+        if (state.isOffline == online) {
+            _state.value = state.copy(isOffline = !online)
+        }
+        if (online) {
+            // Signal is back: load the lyrics we were waiting for, then fill the queue
+            val track = state.track
+            if (state.waitingForSignal && track != null) {
+                _state.value = _state.value.copy(status = LyricsStatus.LOADING, waitingForSignal = false)
+                fetchLyrics(track)
+            } else {
+                prefetchQueue()
+            }
+        }
+    }
+
     init {
-        scope.launch(Dispatchers.IO) { lyricsCache.prune() }
+        try {
+            connectivity?.registerDefaultNetworkCallback(networkCallback)
+        } catch (_: Exception) { }
+        _state.value = _state.value.copy(isOffline = !isOnline())
     }
 
     private fun loadSongOffset(track: TrackInfo?): Long {
@@ -110,6 +160,7 @@ class MediaTracker private constructor(context: Context) {
         _state.value = _state.value.copy(
             track = track,
             offsetMs = lyricsOffsetMs,
+            waitingForSignal = false,
             lines = emptyList(),
             currentIndex = -1,
             currentWordIndex = -1,
@@ -136,7 +187,15 @@ class MediaTracker private constructor(context: Context) {
         override fun onSessionDestroyed() {
             onMediaSessionChanged(null)
         }
+
+        override fun onQueueChanged(queue: MutableList<android.media.session.MediaSession.QueueItem>?) {
+            // Download lyrics for the new queue a moment after it changes
+            handler.removeCallbacks(queuePrefetchRunnable)
+            handler.postDelayed(queuePrefetchRunnable, 2000)
+        }
     }
+
+    private val queuePrefetchRunnable = Runnable { prefetchQueue() }
 
     // Timing adjustments are remembered for the current song only.
     fun adjustOffset(deltaMs: Long) {
@@ -334,12 +393,13 @@ class MediaTracker private constructor(context: Context) {
                     }
 
                     val cacheAge = lyricsCache.getAge(track.title, track.artist)
-                    if (cacheAge < CACHE_REFRESH_MS || lyricsCache.isPinned(track.title, track.artist)) {
-                        prefetchNextSong()
+                    if (cacheAge < CACHE_REFRESH_MS || lyricsCache.isPinned(track.title, track.artist) || !isOnline()) {
+                        prefetchQueue()
                         return@launch
                     }
                 }
 
+                // Always try (even if Android says offline); a failure with no signal waits for it to return
                 val result = fetchFromAllSources(track)
 
                 withContext(Dispatchers.Main) {
@@ -352,21 +412,26 @@ class MediaTracker private constructor(context: Context) {
                             currentIndex = -1,
                             currentWordIndex = -1,
                             status = result.status,
-                            source = result.source
+                            source = result.source,
+                            waitingForSignal = false
                         )
                         if (result.status == LyricsStatus.FOUND) {
                             updateCurrentPosition()
                         }
                         translateIfNeeded(result.lines, track)
                     } else if (cached == null) {
+                        // Nothing found: either there's no signal (retry later) or the song has no lyrics
+                        val offline = !isOnline()
                         _state.value = _state.value.copy(
-                            status = LyricsStatus.NOT_FOUND,
-                            source = ""
+                            status = if (offline) LyricsStatus.ERROR else LyricsStatus.NOT_FOUND,
+                            source = "",
+                            waitingForSignal = offline,
+                            isOffline = offline
                         )
                     }
                 }
 
-                prefetchNextSong()
+                prefetchQueue()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -374,7 +439,8 @@ class MediaTracker private constructor(context: Context) {
                     if (_state.value.track == track && _state.value.status == LyricsStatus.LOADING) {
                         _state.value = _state.value.copy(
                             status = LyricsStatus.ERROR,
-                            source = ""
+                            source = "",
+                            waitingForSignal = !isOnline()
                         )
                     }
                 }
@@ -382,39 +448,49 @@ class MediaTracker private constructor(context: Context) {
         }
     }
 
-    private fun prefetchNextSong() {
+    /**
+     * Downloads lyrics ahead for the songs coming up in the player's queue
+     * (up to [QUEUE_PREFETCH_MAX]), so they're ready in places with no signal.
+     */
+    private fun prefetchQueue() {
         prefetchJob?.cancel()
         prefetchJob = scope.launch(Dispatchers.IO) {
             try {
+                if (!isOnline()) return@launch
                 val controller = activeController ?: return@launch
                 val queue = controller.queue ?: return@launch
                 val currentTitle = _state.value.track?.title ?: return@launch
                 val currentArtist = _state.value.track?.artist ?: return@launch
 
-                var foundCurrent = false
-                for (item in queue) {
+                // Songs after the one playing now (or the whole queue if it can't be found)
+                val items = queue.mapNotNull { item ->
                     val desc = item.description
-                    val title = MetadataCleaner.cleanTitle(desc.title?.toString() ?: continue)
+                    val title = MetadataCleaner.cleanTitle(desc.title?.toString() ?: return@mapNotNull null)
                     val artist = MetadataCleaner.cleanArtist(desc.subtitle?.toString() ?: "")
-
-                    if (!foundCurrent) {
-                        if (title.equals(currentTitle, ignoreCase = true) &&
-                            artist.equals(currentArtist, ignoreCase = true)
-                        ) {
-                            foundCurrent = true
-                        }
-                        continue
-                    }
-
-                    if (lyricsCache.get(title, artist) != null) return@launch
-
-                    val nextTrack = TrackInfo(title, artist, "", 0)
-                    val result = fetchFromAllSources(nextTrack)
-                    if (result != null) {
-                        lyricsCache.put(title, artist, result.lines, result.status, result.source)
-                    }
-                    return@launch
+                    title to artist
                 }
+                val currentIdx = items.indexOfFirst { (t, a) ->
+                    t.equals(currentTitle, ignoreCase = true) && a.equals(currentArtist, ignoreCase = true)
+                }
+                val upcoming = items.drop(currentIdx + 1).take(QUEUE_PREFETCH_MAX)
+
+                for ((title, artist) in upcoming) {
+                    if (!isActive || !isOnline()) return@launch
+                    if (lyricsCache.get(title, artist) != null) continue
+                    try {
+                        val result = fetchFromAllSources(TrackInfo(title, artist, "", 0))
+                        if (result != null) {
+                            lyricsCache.put(title, artist, result.lines, result.status, result.source)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // one song failing doesn't stop the rest
+                    }
+                    delay(250)   // be gentle with the lyrics services
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // prefetch failures are non-fatal
             }
@@ -688,6 +764,7 @@ class MediaTracker private constructor(context: Context) {
     suspend fun clearSavedLyrics(): Int = withContext(Dispatchers.IO) { lyricsCache.clearUnpinned() }
 
     companion object {
+        private const val QUEUE_PREFETCH_MAX = 25
         private const val CACHE_REFRESH_MS = 7L * 24 * 60 * 60 * 1000
 
         @Volatile

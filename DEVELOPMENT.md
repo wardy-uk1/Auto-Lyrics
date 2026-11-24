@@ -55,6 +55,7 @@ AutoLyricsApp (Application)
 | `MainActivity.kt` | Phone UI: lyrics display, font/delay settings, tap-to-sync, audio sync, scroll handling, theme colors. |
 | `PerformanceActivity.kt` | Full-screen immersive karaoke mode with large text and word pop-out effect. |
 | `model/Models.kt` | Data classes: `TrackInfo`, `LyricWord`, `LyricLine`, `AlbumColors`, `LyricsStatus`, `LyricsState`. |
+| Offline mode (2.2) | `MediaTracker` watches connectivity (`registerDefaultNetworkCallback`). A failed lookup while offline sets `waitingForSignal`; when a validated connection returns the song is fetched again. `prefetchQueue()` downloads lyrics for up to 25 upcoming queue items (also on `onQueueChanged`). `LyricsState.isOffline` drives the Offline badge. |
 | `media/MediaTracker.kt` | Singleton. Tracks active media session, fetches lyrics, manages offset, emits `StateFlow<LyricsState>`. |
 | `media/MediaListenerService.kt` | `NotificationListenerService` — detects media sessions. Prefers the playing player, stays with the current one while it buffers/skips, and re-checks every 3s (watchdog) so lyrics don't freeze on a stale session. |
 | `lyrics/SyncLrcClient.kt` | HTTP client for SyncLRC API (primary source). |
@@ -64,7 +65,7 @@ AutoLyricsApp (Application)
 | `lyrics/MetadataCleaner.kt` | Normalizes track/artist strings for API queries. `searchVariants()` builds fallback queries: first artist only, brackets/feat./"- Remastered" removed, and "Artist - Song" titles split (for Metrolist / YouTube-based players). |
 | `media/CarDelayLearner.kt` | Learns the car's audio lag: when ≥3 songs' car Sync-tab nudges agree (≥70%, same sign, ≥150 ms, within 400 ms of the median), moves the median into `aa_offset_ms` and subtracts it from those songs' offsets. Prefs `aa_learn_delay`, `aa_learn_nudges`, `aa_learned_shift_ms`. |
 | `media/AppFilter.kt` | Remembers every app seen with a media session and which ones the user has unticked (prefs `seen_packages`, `ignored_packages`). |
-| `lyrics/LyricsCache.kt` | In-memory lyrics cache with background refresh and queue pre-fetching. |
+| `lyrics/LyricsCache.kt` | On-disk lyrics cache (`files/lyrics_cache`). Kept forever since 2.2 (no automatic pruning); refreshed after 7 days when online. |
 | `util/UpdateChecker.kt` | Checks `api.github.com/repos/wardy-uk1/Auto-Lyrics/releases/latest` (every 6 h from `MediaListenerService`'s watchdog, and on app start), notifies once per version, downloads the `auto-lyrics-*.apk` asset to `cache/updates/` and opens the installer via the `${applicationId}.updates` FileProvider. Needs `REQUEST_INSTALL_PACKAGES` and `POST_NOTIFICATIONS`. |
 | `util/BackupManager.kt` | Exports/imports `auto_lyrics_prefs`, `song_offsets` and pinned lyrics cache files as one JSON file (typed values). |
 | `util/AlbumColorExtractor.kt` | Extracts `AlbumColors` from album art bitmaps using AndroidX Palette. |

@@ -136,7 +136,8 @@ class PerformanceActivity : AppCompatActivity() {
             }
             LyricsStatus.ERROR -> {
                 prevLine.text = ""
-                currentLine.text = "Error loading lyrics"
+                currentLine.text = if (state.waitingForSignal) "No signal — lyrics load when you're back online"
+                else "Error loading lyrics"
                 nextLine.text = ""
             }
             LyricsStatus.PLAIN_ONLY -> {

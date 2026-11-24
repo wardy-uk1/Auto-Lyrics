@@ -217,7 +217,13 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             }
             LyricsStatus.ERROR -> {
                 addTrackHeader(state, items)
-                items.add(buildTextItem("error", "Error loading lyrics"))
+                items.add(
+                    buildTextItem(
+                        "error",
+                        if (state.waitingForSignal) "No signal — lyrics will load when you're back online"
+                        else "Error loading lyrics"
+                    )
+                )
             }
             LyricsStatus.FOUND -> {
                 addTrackHeader(state, items)
@@ -320,7 +326,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         val descBuilder = MediaDescriptionCompat.Builder()
             .setMediaId("header")
             .setTitle(track.title)
-            .setSubtitle(track.artist)
+            .setSubtitle(if (state.isOffline) "${track.artist}  ·  Offline" else track.artist)
 
         val headerArt = state.albumArt ?: lastAlbumArt
         headerArt?.let { art ->
@@ -489,7 +495,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         return when (state.status) {
             LyricsStatus.LOADING -> "Loading lyrics…"
             LyricsStatus.NOT_FOUND -> "No lyrics found"
-            LyricsStatus.ERROR -> "Error loading lyrics"
+            LyricsStatus.ERROR -> if (state.waitingForSignal) "No signal — lyrics load when back online" else "Error loading lyrics"
             else -> ""
         }
     }

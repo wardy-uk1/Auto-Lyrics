@@ -461,10 +461,14 @@ class MainActivity : AppCompatActivity() {
                         tvTrack.visibility = View.GONE
                     }
 
-                    if (state.source.isNotBlank()) {
-                        val srcText = if (state.detectedLanguage != null) {
+                    if (state.source.isNotBlank() || state.isOffline) {
+                        val base = if (state.detectedLanguage != null) {
                             "${state.source} · ${state.detectedLanguage}→en"
                         } else state.source
+                        // Offline badge: saved lyrics still work, new songs load when the signal returns
+                        val srcText = if (state.isOffline) {
+                            if (base.isBlank()) "Offline" else "$base · Offline"
+                        } else base
                         tvSource.text = srcText
                         tvSource.visibility = View.VISIBLE
                     } else {
@@ -491,7 +495,9 @@ class MainActivity : AppCompatActivity() {
                             tvLyrics.text = "No lyrics found for this track."
                         }
                         LyricsStatus.ERROR -> {
-                            tvLyrics.text = "Error loading lyrics.\nCheck your internet connection."
+                            tvLyrics.text = if (state.waitingForSignal)
+                                "No signal right now.\nLyrics will load automatically when you're back online."
+                            else "Error loading lyrics.\nCheck your internet connection."
                         }
                         LyricsStatus.FOUND -> {
                             renderSyncedLyrics(state)

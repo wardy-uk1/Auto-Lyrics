@@ -16,7 +16,13 @@ Future updates install normally.
 2. Open Auto Lyrics and tap **Grant Notification Access**.
 3. For the car: turn on Android Auto's **developer mode** and tick **Unknown sources** — step-by-step guide in the [README](https://github.com/wardy-uk1/Auto-Lyrics#4-turn-on-android-autos-developer-mode-needed-for-the-car).
 
-## What's new in 2.1
+## What's new in 2.2 — Offline mode
+
+- **Lyrics download ahead** — while you have signal, Auto Lyrics fetches lyrics for up to 25 songs coming up in your queue, so they're ready in dead spots.
+- **Retries when the signal returns** — if a song starts with no signal, it shows *No signal — lyrics will load when you're back online* and loads them automatically as soon as you're connected. An **Offline** badge shows on the phone and car while you're offline.
+- **Saved lyrics are kept** — lyrics are no longer deleted automatically, so every song you've played works offline. (*Clear saved lyrics* in settings still empties them if you want.)
+
+## New in 2.1
 
 - **Update checker** — Auto Lyrics now tells you when a new version is out, with a banner in the app and a phone notification. Tap **Update** to download and install it in one go (the first time, Android asks you to allow Auto Lyrics to install apps). There's also **Check for updates** in settings.
 

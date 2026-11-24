@@ -49,5 +49,9 @@ data class LyricsState(
     val albumArt: Bitmap? = null,
     val albumColors: AlbumColors? = null,
     val translatedLines: List<String>? = null,
-    val detectedLanguage: String? = null
+    val detectedLanguage: String? = null,
+    /** True while the phone has no working internet connection. */
+    val isOffline: Boolean = false,
+    /** True when this song's lyrics couldn't load because there was no signal; they load when it returns. */
+    val waitingForSignal: Boolean = false
 )

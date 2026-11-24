@@ -27,6 +27,7 @@
 - **Choose music apps** — untick apps you don't want followed (e.g. WhatsApp voice notes, podcasts)
 - **Back up & restore** your settings, song timings and picked lyrics
 - **Update checker** — a banner and notification when a new version is out; one tap downloads and installs it
+- **Offline mode** — lyrics for up to 25 upcoming songs are downloaded ahead, every song you've played stays saved, and anything missed with no signal loads automatically when you're back online
 - Optional translation of non-English lyrics into English (off by default)
 
 **Lyrics sources:** [SyncLRC](https://synclrc.tharuk.pro), [LRCLIB](https://lrclib.net) and NetEase Cloud Music. Synced lyrics are always preferred over plain text, and messy titles from YouTube-based apps (several artists, "(Official Video)", "Artist - Song") are cleaned up automatically.
@@ -36,7 +37,7 @@
 ## Install
 
 ### 1. Download the app
-Go to the **[Releases page](../../releases/latest)** and download the `.apk` file (for example `auto-lyrics-2.1.0.apk`) on your phone.
+Go to the **[Releases page](../../releases/latest)** and download the `.apk` file (for example `auto-lyrics-2.2.0.apk`) on your phone.
 
 > **Already have the original Auto Lyrics installed?** Uninstall it first. Both apps use the same internal ID, so Android will refuse to install this one over it.
 >
@@ -87,6 +88,7 @@ On the car screen open **Settings → Change layout** and choose **Media closer 
 |---|---|
 | Auto Lyrics isn't in Android Auto | Check *Unknown sources* is still ticked (step 4), restart the phone and reconnect. |
 | "App not installed" | Uninstall the original Auto Lyrics (or any older copy signed differently) and try again. |
+| "No signal" message | Normal in dead spots — the lyrics load by themselves when you're back online. Songs coming up in your queue are downloaded ahead while you have signal. |
 | No lyrics appear | Make sure notification access is on (step 3), and that the music app is ticked under **Choose music apps…** |
 | Shows "More" instead of Lyrics / Sync tabs | Unplug and reconnect, or force-stop Android Auto in your phone's app settings. |
 
